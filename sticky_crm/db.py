@@ -218,7 +218,7 @@ def get_employees(search_query=None):
                         LOWER(first_name) LIKE LOWER(%s) OR
                         LOWER(middle_name) LIKE LOWER(%s)
                         )
-                    ORDER BY last_name, first_name \
+                    ORDER BY last_name, first_name
                     """
             search_param = f"%{search_query}%"
             cursor.execute(query, (search_param, search_param, search_param))
@@ -257,7 +257,7 @@ def create_group_chat(name, creator_id, member_ids):
         # Добавляем участников
         for emp_id in member_ids:
             cursor.execute(
-                "INSERT INTO chat_members (chat_id, employee_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT INTO chat_members (chat_id, employee_id) VALUES (%s, %s) ON CONFLICT (chat_id, employee_id) DO NOTHING",
                 (chat_id, emp_id)
             )
         conn.commit()
@@ -565,7 +565,7 @@ def create_group_chat_auto(user_id, member_ids):
         # Добавляем участников
         for emp_id in member_ids:
             cursor.execute(
-                "INSERT INTO chat_members (chat_id, employee_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT INTO chat_members (chat_id, employee_id) VALUES (%s, %s) ON CONFLICT (chat_id, employee_id) DO NOTHING",
                 (chat_id, emp_id)
             )
         conn.commit()
