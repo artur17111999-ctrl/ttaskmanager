@@ -1,0 +1,51 @@
+* { background: red; }
+#chatHeader {
+    background: #17212b;
+    border-bottom: 1px solid #24313d;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 12px;
+}
+
+/* Сама QScrollArea – прозрачная */
+QScrollArea#messageArea {
+    background: transparent;
+    border: none;
+}
+
+/* Внутренний контейнер, где лежат сообщения */
+#scrollContainer {
+    background: qlineargradient(
+        x1:0, y1:0,
+        x2:0, y2:1,
+        stop:0 #101820,
+        stop:1 #0e141b
+    );
+}
+
+#messageInput {
+    background: #17212b;
+    color: white;
+    border: 1px solid #263442;
+    border-radius: 18px;
+    padding: 10px 14px;
+    font-size: 10.5pt;
+}
+
+#messageInput:focus {
+    border: 1px solid #3390ec;
+}
+
+#sendBtn {
+    background: #3390ec;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    min-width: 42px;
+    min-height: 42px;
+}
+
+#sendBtn:hover {
+    background: #4aa3ff;
+}

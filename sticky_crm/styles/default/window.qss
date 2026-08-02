@@ -1,0 +1,12 @@
+QWidget {
+    background: qlineargradient(
+        x1:0, y1:0,
+        x2:1, y2:1,
+        stop:0 #0d1017,
+        stop:0.45 #151b24,
+        stop:1 #202938
+    );
+    color: #f4f6fb;
+    font-family: "Segoe UI Variable", "Segoe UI";
+    font-size: 14px;
+}

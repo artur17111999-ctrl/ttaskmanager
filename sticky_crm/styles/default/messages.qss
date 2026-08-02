@@ -1,0 +1,59 @@
+/* Пузырь чужого сообщения */
+QFrame#bubbleFrame[isOwn="false"] {
+    background-color: #18222d;
+    border-radius: 16px;
+}
+
+
+/* Пузырь своего сообщения */
+QFrame#bubbleFrame[isOwn="true"] {
+    background-color: #3390ec;
+    border-radius: 16px;
+}
+
+
+/* Текст сообщения */
+QLabel#messageText {
+    color: white;
+    background-color: transparent;
+    font-size: 10.5pt;
+}
+
+
+/* Время */
+QLabel#timeLabel {
+    color: #8fa3b8;
+    font-size: 8pt;
+}
+
+
+QFrame#bubbleFrame[isOwn="true"] QLabel#timeLabel {
+    color: #d5e8ff;
+}
+
+
+/* Имя отправителя */
+QLabel#senderName {
+    color: #65b8ff;
+    font-weight: bold;
+    font-size: 9pt;
+}
+
+
+/* Статус прочтения */
+QLabel#statusIcon {
+    color: white;
+}
+
+
+/* Поле редактирования */
+QLineEdit#editInput {
+    background-color: #17212b;
+    border: 1px solid #3390ec;
+    border-radius: 12px;
+    color: white;
+    padding: 8px;
+}
+QFrame#bubbleFrame QLabel {
+    background-color: transparent;
+}

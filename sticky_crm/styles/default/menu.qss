@@ -1,0 +1,133 @@
+#menuPanel {
+    background:#111827;
+    border-right:1px solid #334155;
+}
+
+
+
+#menuHeader {
+    color:white;
+    font-size:26px;
+    font-weight:900;
+    padding:25px;
+}
+
+
+
+#menuButton {
+    background:#1e293b;
+    color:#cbd5e1;
+    border-radius:14px;
+    border:1px solid transparent;
+    margin:5px 8px;
+    padding:18px 22px;
+    font-size:18px;
+    font-weight:800;
+    text-align:left;
+}
+
+
+
+#menuButton:hover {
+    background:#334155;
+    color:white;
+    border:1px solid #3b82f6;
+
+}
+
+
+
+#menuButton:checked {
+    background: #5b8cff;
+    color: white;
+    font-weight: bold;
+}
+
+
+
+#menuButton {
+
+    background:#1e293b;
+    color:#cbd5e1;
+    border-radius:14px;
+    border:1px solid transparent;
+    margin:2px 8px;
+    padding:20px 22px;
+    font-size:21px;
+    font-weight:900;
+    text-align:left;
+
+}
+
+
+
+
+#userInfoLabel {
+
+    color:#94a3b8;
+    background:#0f172a;
+    border-radius:12px;
+    margin:10px;
+    padding:18px;
+    font-size:15px;
+    font-weight:700;
+}
+
+
+
+
+#contentArea {
+    background:#0b1220;
+    border-radius:18px;
+    margin:12px;
+}
+
+
+
+#emptyPage {
+    color:#64748b;
+    font-size:24px;
+}
+/* Панель заголовка */
+#headerPanel {
+    background: #1a2332;
+    border-bottom: 1px solid #313a49;
+    min-height: 40px;
+}
+
+#pageTitleLabel {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* Кнопка уведомлений */
+#notificationButton {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 18px;
+    padding: 4px;
+}
+
+#notificationButton:hover {
+    background: #2a3342;
+    border-radius: 4px;
+}
+
+/* Меню уведомлений */
+QMenu {
+    background: #1a2332;
+    border: 1px solid #313a49;
+    padding: 5px;
+    color: white;
+}
+
+QMenu::item {
+    padding: 6px 20px;
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background: #3390ec;
+}
