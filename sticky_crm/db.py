@@ -480,7 +480,7 @@ def get_contacts_and_groups(user_id, search_query=None):
     Возвращает список словарей:
     [
         {'type': 'employee', 'id': emp_id, 'name': 'ФИО', 'chat_id': None},
-        {'type': 'group', 'id': chat_id, 'name': 'Название группы', 'chat_id': chat_id},
+        {'type': 'group', 'id': chat_id, 'name': 'Название группы', 'chat_id': chat_id, 'is_leader': True/False},
         {'type': 'self', 'id': None, 'name': 'Избранное', 'chat_id': self_chat_id}
     ]
     """
@@ -515,28 +515,58 @@ def get_contacts_and_groups(user_id, search_query=None):
                 full_name += f" {middle_name}"
             results.append({'type': 'employee', 'id': emp_id, 'name': full_name, 'chat_id': None})
 
-        # Групповые чаты, где пользователь участник
+        # Групповые чаты, где пользователь участник + флаг is_leader
         group_query = """
-            SELECT c.id, c.name
+            SELECT c.id, c.name, (c.created_by = %s) as is_leader
             FROM chats c
             JOIN chat_members cm ON c.id = cm.chat_id
             WHERE c.is_group = TRUE AND cm.employee_id = %s
         """
-        gparams = [user_id]
+        gparams = [user_id, user_id]
         if search_query:
             group_query += " AND LOWER(c.name) LIKE LOWER(%s)"
             gparams.append(f"%{search_query}%")
         group_query += " ORDER BY c.name"
         cursor.execute(group_query, gparams)
         for row in cursor.fetchall():
-            chat_id, name = row
-            results.append({'type': 'group', 'id': chat_id, 'name': name, 'chat_id': chat_id})
+            chat_id, name, is_leader = row
+            results.append({'type': 'group', 'id': chat_id, 'name': name, 'chat_id': chat_id, 'is_leader': is_leader})
 
         # Чат "Избранное"
         return results
     except Exception as e:
         print(f"Ошибка получения контактов: {e}")
         return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def delete_group_chat(chat_id, user_id):
+    """
+    Удалить групповой чат. Может удалить только создатель (created_by = user_id).
+    Возвращает True при успехе, False если чат не найден или пользователь не лидер.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        # Проверяем, что чат существует и пользователь - его создатель
+        cursor.execute("""
+            SELECT id FROM chats
+            WHERE id = %s AND is_group = TRUE AND created_by = %s
+        """, (chat_id, user_id))
+        if not cursor.fetchone():
+            return False
+        # Удаляем чат (каскадно удалит участников и сообщения)
+        cursor.execute("DELETE FROM chats WHERE id = %s", (chat_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка удаления группового чата: {e}")
+        return False
     finally:
         cursor.close()
         conn.close()
