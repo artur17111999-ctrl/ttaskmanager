@@ -1,0 +1,293 @@
+/* ===== Стили виджета создания задачи ===== */
+
+/* Кнопка "Назад" */
+QPushButton#backButton {
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    padding: 6px 12px;
+    color: #333333;
+    min-height: 35px;
+    min-width: 100px;
+}
+
+QPushButton#backButton:hover {
+    background-color: #d0d0d0;
+}
+
+/* Заголовок создания задачи */
+QLabel#taskHeaderLabel {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+/* Поля ввода (название задачи) */
+QLineEdit#titleEdit {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    min-height: 40px;
+}
+
+QLineEdit#titleEdit:focus {
+    border: 2px solid #0078d4;
+}
+
+/* Поле описания */
+QTextEdit#descriptionEdit {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    min-height: 200px;
+}
+
+QTextEdit#descriptionEdit:focus {
+    border: 2px solid #0078d4;
+}
+
+/* Метка прикрепленных файлов */
+QLabel#filesLabel {
+    color: #666;
+}
+
+/* Кнопка прикрепления файла */
+QPushButton#attachFileButton {
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px 15px;
+    color: #333333;
+}
+
+QPushButton#attachFileButton:hover {
+    background-color: #d0d0d0;
+}
+
+/* Метка автора */
+QLabel#authorLabel {
+    padding: 10px;
+    font-weight: bold;
+    color: white;
+    background-color: #0078d4;
+    border-radius: 4px;
+}
+
+/* Комбобоксы (исполнитель, приоритет) */
+QComboBox#executorCombo,
+QComboBox#priorityCombo {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 40px;
+}
+
+QComboBox#executorCombo:focus,
+QComboBox#priorityCombo:focus {
+    border: 2px solid #0078d4;
+}
+
+/* Список наблюдателей */
+QListWidget#observersList {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 100px;
+}
+
+/* Список тегов */
+QListWidget#tagsList {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 80px;
+}
+
+/* Поле ввода нового тега */
+QLineEdit#newTagEdit {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 35px;
+}
+
+QLineEdit#newTagEdit:focus {
+    border: 2px solid #0078d4;
+}
+
+/* Кнопка создания тега */
+QPushButton#createTagButton {
+    background-color: #0078d4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    max-width: 40px;
+}
+
+QPushButton#createTagButton:hover {
+    background-color: #0063b1;
+}
+
+/* Редактор даты (дедлайн) */
+QDateEdit#deadlineEdit {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-height: 40px;
+}
+
+QDateEdit#deadlineEdit:focus {
+    border: 2px solid #0078d4;
+}
+
+/* Кнопка отмены */
+QPushButton#cancelButton {
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333333;
+    min-height: 45px;
+    min-width: 120px;
+}
+
+QPushButton#cancelButton:hover {
+    background-color: #d0d0d0;
+}
+
+/* Кнопка создания задачи */
+QPushButton#createTaskMainButton {
+    background-color: #0078d4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    min-height: 45px;
+    min-width: 150px;
+}
+
+QPushButton#createTaskMainButton:hover {
+    background-color: #0063b1;
+}
+
+
+/* ===== Стили списка задач ===== */
+
+/* Заголовок списка задач */
+QLabel#tasksTitleLabel {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+/* Кнопка создания задачи в списке */
+QPushButton#createTaskButton {
+    background-color: #0078d4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 10px 20px;
+    min-height: 40px;
+    min-width: 150px;
+}
+
+QPushButton#createTaskButton:hover {
+    background-color: #0063b1;
+}
+
+/* Область прокрутки задач */
+QScrollArea#tasksScrollArea {
+    border: none;
+}
+
+/* Карточка задачи */
+QFrame#taskCard {
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 15px;
+}
+
+QFrame#taskCard:hover {
+    border: 1px solid #0078d4;
+    background-color: #383838;
+}
+
+/* Заголовок задачи */
+QLabel#taskTitleLabel {
+    font-size: 16px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+/* Метки приоритета */
+QLabel#priorityLow {
+    background-color: #4caf50;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+QLabel#priorityMedium {
+    background-color: #ff9800;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+QLabel#priorityCritical {
+    background-color: #f44336;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+QLabel#priorityBlocker {
+    background-color: #9c27b0;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* Описание задачи */
+QLabel#taskDescriptionLabel {
+    color: #cccccc;
+    font-size: 14px;
+}
+
+/* Информация об исполнителе */
+QLabel#executorInfoLabel {
+    color: #aaaaaa;
+    font-size: 13px;
+}
+
+/* Информация о дедлайне */
+QLabel#deadlineInfoLabel {
+    color: #aaaaaa;
+    font-size: 13px;
+}
+
+/* Информация об авторе */
+QLabel#authorInfoLabel {
+    color: #888888;
+    font-size: 12px;
+}
+
+/* Метка пустого списка задач */
+QLabel#emptyTasksLabel {
+    font-size: 18px;
+    color: #999;
+    padding: 50px;
+}
