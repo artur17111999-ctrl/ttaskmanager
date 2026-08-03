@@ -16,7 +16,9 @@ from db import (
     get_task_detail,
     update_task,
     delete_task,
-    add_task_comment
+    add_task_comment,
+    update_task_comment,
+    delete_task_comment
 )
 
 # Константы для ролей данных
@@ -1044,6 +1046,10 @@ class TaskDetailView(QWidget):
 
         # Лента комментариев — теперь часть основного скролла
         self.comments_container = QWidget()
+        self.comments_container.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Minimum
+        )
 
         self.comments_container_layout = QVBoxLayout(
             self.comments_container
@@ -1057,7 +1063,8 @@ class TaskDetailView(QWidget):
 
 
         comments_layout.addWidget(
-            self.comments_container
+            self.comments_container,
+            1
         )
 
 
@@ -1184,16 +1191,6 @@ class TaskDetailView(QWidget):
             placeholder.setAlignment(Qt.AlignCenter)
             placeholder.setStyleSheet("color: gray; font-style: italic;")
             self.comments_container_layout.addWidget(placeholder)
-        
-        # Автоматическая прокрутка к первому комментарию (который теперь вверху - самый новый)
-        QTimer.singleShot(
-            100,
-            lambda:
-                self.scroll_area.verticalScrollBar()
-                .setValue(
-                    self.scroll_area.verticalScrollBar().maximum()
-                )
-        )
     
     def create_comment_widget(self, comment):
         """Создать виджет одного комментария."""
@@ -1219,6 +1216,22 @@ class TaskDetailView(QWidget):
         time_label.setObjectName("commentTimeLabel")
         header_layout.addStretch()
         header_layout.addWidget(time_label)
+        
+        # Кнопки только для своего комментария
+        if comment.get('author_id') == self.current_user_id:
+            edit_btn = QPushButton("✏")
+            edit_btn.setMaximumWidth(35)
+            edit_btn.clicked.connect(
+                lambda: self.edit_comment(comment)
+            )
+            header_layout.addWidget(edit_btn)
+            
+            delete_btn = QPushButton("🗑")
+            delete_btn.setMaximumWidth(35)
+            delete_btn.clicked.connect(
+                lambda: self.remove_comment(comment)
+            )
+            header_layout.addWidget(delete_btn)
         
         layout.addLayout(header_layout)
         
@@ -1316,6 +1329,77 @@ class TaskDetailView(QWidget):
     def go_back(self):
         """Вернуться к списку задач."""
         self.backRequested.emit()
+    
+    def edit_comment(self, comment):
+        """Редактировать комментарий."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Редактировать комментарий")
+        
+        layout = QVBoxLayout(dialog)
+        
+        editor = QTextEdit()
+        editor.setPlainText(comment['text'])
+        
+        layout.addWidget(editor)
+        
+        save_btn = QPushButton("Сохранить")
+        layout.addWidget(save_btn)
+        
+        def save():
+            text = editor.toPlainText().strip()
+            
+            if not text:
+                QMessageBox.warning(
+                    self,
+                    "Ошибка",
+                    "Комментарий пустой"
+                )
+                return
+            
+            success = update_task_comment(
+                comment['id'],
+                self.current_user_id,
+                text
+            )
+            
+            if success:
+                dialog.accept()
+                self.load_task_data()
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Ошибка",
+                    "Не удалось изменить комментарий"
+                )
+        
+        save_btn.clicked.connect(save)
+        dialog.exec()
+    
+    def remove_comment(self, comment):
+        """Удалить комментарий."""
+        reply = QMessageBox.question(
+            self,
+            "Удаление",
+            "Удалить комментарий?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        success = delete_task_comment(
+            comment['id'],
+            self.current_user_id
+        )
+        
+        if success:
+            self.load_task_data()
+        else:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Не удалось удалить комментарий"
+            )
 
 
 class TasksWidget(QWidget):

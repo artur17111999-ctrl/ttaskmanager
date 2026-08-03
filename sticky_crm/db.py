@@ -1407,7 +1407,8 @@ def get_task_comments(task_id):
                 tc.id,
                 tc.comment_text,
                 tc.created_at,
-                e.last_name || ' ' || e.first_name as author_name
+                e.last_name || ' ' || e.first_name as author_name,
+                tc.author_id
             FROM task_comments tc
             JOIN employees e ON tc.author_id = e.id
             WHERE tc.task_id = %s
@@ -1420,7 +1421,8 @@ def get_task_comments(task_id):
                 'id': row[0],
                 'text': row[1],
                 'created_at': row[2].strftime("%d.%m.%Y %H:%M") if row[2] else "",
-                'author_name': row[3]
+                'author_name': row[3],
+                'author_id': row[4]
             })
         return comments
     except Exception as e:
@@ -1447,6 +1449,53 @@ def add_task_comment(task_id, author_id, comment_text):
     except Exception as e:
         conn.rollback()
         print(f"Ошибка добавления комментария: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def update_task_comment(comment_id, user_id, new_text):
+    """Обновить текст комментария (только если пользователь - автор)."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE task_comments
+            SET text = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s AND author_id = %s
+        """, (new_text, comment_id, user_id))
+        conn.commit()
+        success = cursor.rowcount > 0
+        return success
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка обновления комментария: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def delete_task_comment(comment_id, user_id):
+    """Удалить комментарий (только если пользователь - автор)."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM task_comments
+            WHERE id = %s AND author_id = %s
+        """, (comment_id, user_id))
+        conn.commit()
+        success = cursor.rowcount > 0
+        return success
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка удаления комментария: {e}")
         return False
     finally:
         cursor.close()
