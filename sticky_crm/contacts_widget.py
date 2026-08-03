@@ -437,24 +437,51 @@ class ContactsWidget(QWidget):
         personal_chats = get_personal_chats(self.current_user_id)
         unread_counts = get_unread_message_counts(self.current_user_id)
 
-        self.contact_list.clear()
+        # Разделяем контакты на категории для сортировки
+        self_items = []
+        employee_items = []
+        group_items = []
+        
         for c in contacts:
-            if c['type'] == 'employee':
+            if c['type'] == 'self':
+                chat_id = c['chat_id']
+                unread = unread_counts.get(chat_id, 0) if chat_id else 0
+                item_data = {'prefix': '⭐ ', 'name': c['name'], 'data': c, 'unread': unread, 'created_by': None}
+                self_items.append(item_data)
+            elif c['type'] == 'employee':
                 prefix = "👤 "
                 chat_id = personal_chats.get(c['id'])
+                unread = unread_counts.get(chat_id, 0) if chat_id else 0
+                item_data = {'prefix': prefix, 'name': c['name'], 'data': c, 'unread': unread, 'created_by': None}
+                employee_items.append(item_data)
             elif c['type'] == 'group':
                 prefix = "👥 "
                 chat_id = c['chat_id']
-            else:
-                continue
-
-            unread = unread_counts.get(chat_id, 0) if chat_id else 0
-            item = QListWidgetItem(prefix + c['name'])
-            item.setData(Qt.UserRole, c)
-            item.setData(Qt.UserRole + 1, unread)
+                unread = unread_counts.get(chat_id, 0) if chat_id else 0
+                created_by = c.get('created_by')
+                item_data = {'prefix': prefix, 'name': c['name'], 'data': c, 'unread': unread, 'created_by': created_by}
+                group_items.append(item_data)
+        
+        # Сортировка внутри каждой категории: сначала с непрочитанными (по имени), затем без (по имени)
+        def sort_key(item):
+            has_unread = 1 if item['unread'] > 0 else 0
+            return (-has_unread, item['name'].lower())
+        
+        self_items.sort(key=sort_key)
+        employee_items.sort(key=sort_key)
+        group_items.sort(key=sort_key)
+        
+        # Объединяем: сначала "Избранное", затем сотрудники, затем группы
+        all_items = self_items + employee_items + group_items
+        
+        self.contact_list.clear()
+        for item_data in all_items:
+            item = QListWidgetItem(item_data['prefix'] + item_data['name'])
+            item.setData(Qt.UserRole, item_data['data'])
+            item.setData(Qt.UserRole + 1, item_data['unread'])
             # Для групповых чатов сохраняем created_by для проверки прав удаления
-            if c['type'] == 'group' and c.get('created_by') is not None:
-                item.setData(Qt.UserRole + 2, c['created_by'])
+            if item_data['data']['type'] == 'group' and item_data['created_by'] is not None:
+                item.setData(Qt.UserRole + 2, item_data['created_by'])
             self.contact_list.addItem(item)
 
         self.highlight_current_chat()
@@ -468,7 +495,12 @@ class ContactsWidget(QWidget):
         data = current.data(Qt.UserRole)
         if data is None:
             return
-        if data['type'] == 'employee':
+        if data['type'] == 'self':
+            # Чат с самим собой (Избранное)
+            chat_id = data['chat_id']
+            if chat_id:
+                self.open_chat(chat_id, data['name'], 'self')
+        elif data['type'] == 'employee':
             emp_id = data['id']
             if emp_id == self.current_user_id:
                 return
