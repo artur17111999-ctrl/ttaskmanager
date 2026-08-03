@@ -1084,7 +1084,7 @@ def get_tasks(filter_params=None, current_user_id=None):
                 t.created_at,
                 a.last_name || ' ' || a.first_name as author_name,
                 e.last_name || ' ' || e.first_name as executor_name,
-                c.full_name as creator_name
+                c.last_name || ' ' || c.first_name as creator_name
             FROM tasks t
             JOIN employees a ON t.author_id = a.id
             JOIN employees e ON t.executor_id = e.id
@@ -1173,7 +1173,7 @@ def get_task_detail(task_id):
                 t.created_at,
                 a.last_name || ' ' || a.first_name as author_name,
                 e.last_name || ' ' || e.first_name as executor_name,
-                c.full_name as creator_name
+                c.last_name || ' ' || c.first_name as creator_name
             FROM tasks t
             JOIN employees a ON t.author_id = a.id
             JOIN employees e ON t.executor_id = e.id
