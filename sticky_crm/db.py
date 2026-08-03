@@ -1147,35 +1147,41 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
         # Если передан current_user_id, фильтруем по роли пользователя
         if current_user_id is not None:
             query += """
-            WHERE t.author_id = %s 
-               OR t.executor_id = %s 
-               OR EXISTS (
-                   SELECT 1 FROM task_observers tobs 
-                   WHERE tobs.task_id = t.id AND tobs.employee_id = %s
-               )
+            WHERE (
+                t.author_id = %s 
+                OR t.executor_id = %s 
+                OR EXISTS (
+                    SELECT 1 FROM task_observers tobs 
+                    WHERE tobs.task_id = t.id AND tobs.employee_id = %s
+                )
+            )
             """
             params.extend([current_user_id, current_user_id, current_user_id])
         
         # Дополнительные фильтры
         if filter_params:
             conditions = []
-            if filter_params.get('status'):
+            if filter_params.get('status') is not None:
                 conditions.append("t.status = %s")
                 params.append(filter_params['status'])
-            if filter_params.get('priority'):
+            if filter_params.get('priority') is not None:
                 conditions.append("t.priority = %s")
                 params.append(filter_params['priority'])
-            if filter_params.get('executor_id'):
+            if filter_params.get('executor_id') is not None:
                 conditions.append("t.executor_id = %s")
                 params.append(filter_params['executor_id'])
-            if filter_params.get('author_id'):
+            if filter_params.get('author_id') is not None:
                 conditions.append("t.author_id = %s")
                 params.append(filter_params['author_id'])
             
             # Поиск по названию, описанию и исполнителю
             if filter_params.get('search'):
                 search_param = f"%{filter_params['search']}%"
-                conditions.append("(LOWER(t.title) LIKE LOWER(%s) OR LOWER(t.description) LIKE LOWER(%s) OR LOWER(e.last_name || ' ' || e.first_name) LIKE LOWER(%s))")
+                conditions.append("""(
+                    LOWER(t.title) LIKE LOWER(%s) 
+                    OR LOWER(COALESCE(t.description, '')) LIKE LOWER(%s) 
+                    OR LOWER(e.last_name || ' ' || e.first_name) LIKE LOWER(%s)
+                )""")
                 params.extend([search_param, search_param, search_param])
             
             # Фильтр "Мои задачи" - только те, где пользователь исполнитель
