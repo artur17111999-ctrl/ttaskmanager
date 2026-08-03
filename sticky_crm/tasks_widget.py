@@ -933,10 +933,10 @@ class TaskDetailView(QWidget):
         
         main_layout.addLayout(header_layout)
         
-        # Основной контент в скролл-области
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Основной контент в скролл-области (self.scroll_area для доступа из load_comments)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
@@ -1032,18 +1032,17 @@ class TaskDetailView(QWidget):
 
         comments_group = QGroupBox("Комментарии")
         comments_group.setObjectName("commentsGroup")
+        comments_group.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Minimum
+        )
 
         comments_layout = QVBoxLayout(comments_group)
         comments_layout.setContentsMargins(10, 10, 10, 10)
         comments_layout.setSpacing(10)
 
 
-        # Лента комментариев
-        self.comments_scroll = QScrollArea()
-        self.comments_scroll.setWidgetResizable(True)
-        self.comments_scroll.setFrameShape(QFrame.NoFrame)
-
-
+        # Лента комментариев — теперь часть основного скролла
         self.comments_container = QWidget()
 
         self.comments_container_layout = QVBoxLayout(
@@ -1057,25 +1056,8 @@ class TaskDetailView(QWidget):
         self.comments_container_layout.setSpacing(8)
 
 
-        self.comments_scroll.setWidget(
-            self.comments_container
-        )
-
-
-        # Минимальная высота
-        self.comments_scroll.setMinimumHeight(120)
-
-        # Максимальной высоты нет —
-        # блок будет расширяться
-        self.comments_scroll.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Expanding
-        )
-
-
         comments_layout.addWidget(
-            self.comments_scroll,
-            stretch=1
+            self.comments_container
         )
 
 
@@ -1086,8 +1068,8 @@ class TaskDetailView(QWidget):
         
         content_layout.addStretch()
         
-        scroll_area.setWidget(content_widget)
-        main_layout.addWidget(scroll_area)
+        self.scroll_area.setWidget(content_widget)
+        main_layout.addWidget(self.scroll_area)
         
         # Кнопки действий
         buttons_layout = QHBoxLayout()
@@ -1203,15 +1185,13 @@ class TaskDetailView(QWidget):
             placeholder.setStyleSheet("color: gray; font-style: italic;")
             self.comments_container_layout.addWidget(placeholder)
         
-        self.comments_container_layout.addStretch(1)
-        
         # Автоматическая прокрутка к первому комментарию (который теперь вверху - самый новый)
         QTimer.singleShot(
             100,
             lambda:
-                self.comments_scroll.verticalScrollBar()
+                self.scroll_area.verticalScrollBar()
                 .setValue(
-                    0
+                    self.scroll_area.verticalScrollBar().maximum()
                 )
         )
     
@@ -1219,6 +1199,10 @@ class TaskDetailView(QWidget):
         """Создать виджет одного комментария."""
         frame = QFrame()
         frame.setObjectName("commentFrame")
+        frame.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Minimum
+        )
         frame.setFrameStyle(QFrame.NoFrame)
         
         layout = QVBoxLayout(frame)
