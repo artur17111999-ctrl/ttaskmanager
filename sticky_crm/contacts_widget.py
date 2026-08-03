@@ -936,12 +936,21 @@ class ContactsWidget(QWidget):
             bubble.enter_edit_mode(current_text)
 
     def on_delete_request(self, message_id):
-        if delete_message(message_id):
+        print(f"[DEBUG] on_delete_request вызван для message_id={message_id}")
+        result = delete_message(message_id)
+        print(f"[DEBUG] delete_message вернул {result}")
+        if result:
             bubble = self.find_message_bubble(message_id)
+            print(f"[DEBUG] find_message_bubble вернул {bubble}")
             if bubble:
                 bubble.msg_data["is_deleted"] = True
                 bubble.msg_data["text"] = ""
                 bubble.update_text_display()
+                print(f"[DEBUG] Сообщение помечено как удалённое")
+            else:
+                print(f"[DEBUG] Не удалось найти пузырёк сообщения {message_id}")
+        else:
+            print(f"[DEBUG] Ошибка при удалении сообщения из БД")
 
     def on_edit_message(self, message_id, new_text):
         if edit_message(message_id, new_text):
