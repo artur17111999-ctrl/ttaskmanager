@@ -14,7 +14,8 @@ from db import (
     create_task as db_create_task,
     get_tasks as db_get_tasks,
     get_task_detail,
-    update_task
+    update_task,
+    delete_task
 )
 
 # Константы для ролей данных
@@ -1147,10 +1148,6 @@ class TasksWidget(QWidget):
             except:
                 pass
         
-        # Делаем карточку кликабельной
-        card.mousePressEvent = lambda e: self.open_task(task_data['id'])
-        card.setCursor(Qt.PointingHandCursor)
-        
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
         
@@ -1236,7 +1233,20 @@ class TasksWidget(QWidget):
         author_label.setObjectName("authorInfoLabel")
         info_layout.addWidget(author_label)
         
+        # Кнопка удаления (только если пользователь - автор)
+        if task_data.get('author_id') == self.current_user_id:
+            delete_btn = QPushButton("🗑")
+            delete_btn.setObjectName("deleteTaskButton")
+            delete_btn.setMaximumWidth(30)
+            delete_btn.setToolTip("Удалить задачу")
+            delete_btn.clicked.connect(lambda checked, tid=task_data['id']: self.delete_task(tid))
+            info_layout.addWidget(delete_btn)
+        
         layout.addLayout(info_layout)
+        
+        # Делаем карточку кликабельной (кроме кнопки удаления)
+        card.mousePressEvent = lambda e: self.open_task(task_data['id'])
+        card.setCursor(Qt.PointingHandCursor)
         
         return card
     
@@ -1261,6 +1271,27 @@ class TasksWidget(QWidget):
                 "Ошибка",
                 f"Не удалось загрузить задачу:\n{e}"
             )
+    
+    def delete_task(self, task_id):
+        """Удалить задачу (только если пользователь - автор)."""
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение удаления",
+            "Вы уверены, что хотите удалить эту задачу?\nЭто действие нельзя отменить.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        success, message = delete_task(task_id, self.current_user_id)
+        
+        if success:
+            QMessageBox.information(self, "Успех", message)
+            self.load_tasks()
+        else:
+            QMessageBox.critical(self, "Ошибка", message)
     
     def show_creator(self):
         """Показать страницу создания задачи."""
