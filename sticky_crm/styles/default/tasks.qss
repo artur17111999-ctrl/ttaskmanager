@@ -1,112 +1,58 @@
-/* ===============================
-   TASK CARD
-   =============================== */
-
-
 /* Карточка задачи */
 QFrame#taskCard {
-
     background-color: #1e2938;
-
     border: 1px solid #3a4658;
-
     border-radius: 16px;
-
     padding: 15px;
-
 }
 
-
-/* Наведение */
+/* Наведение на карточку задачи */
 QFrame#taskCard:hover {
-
     background-color: #263548;
-
     border: 1px solid #5b8cff;
-
 }
-
 
 /* Все элементы внутри карточки прозрачные */
 QFrame#taskCard QLabel,
 QFrame#taskCard QWidget {
-
     background-color: transparent;
-
 }
-
-
 
 /* Заголовок задачи */
 QLabel#taskTitleLabel {
-
     background-color: transparent;
-
     color: white;
-
     font-size: 16px;
-
     font-weight: 700;
-
 }
 
-
-
-/* Описание */
+/* Описание задачи */
 QLabel#taskDescriptionLabel {
-
     background-color: transparent;
-
     color: #c8d4e3;
-
     font-size: 14px;
-
 }
-
-
 
 /* Исполнитель */
 QLabel#executorInfoLabel {
-
     background-color: transparent;
-
     color: #9fb0c5;
-
     font-size: 13px;
-
 }
-
-
 
 /* Дедлайн */
 QLabel#deadlineInfoLabel {
-
     background-color: transparent;
-
     color: #9fb0c5;
-
     font-size: 13px;
-
 }
-
-
 
 /* Автор */
 QLabel#authorInfoLabel {
-
     background-color: transparent;
-
     color: #71839a;
-
     font-size: 12px;
-
 }
-
-
-
-/* ===============================
-   BUTTONS
-   =============================== */
 
 /* Кнопка удаления задачи (красная) */
 QPushButton#deleteTaskButton {
@@ -124,6 +70,7 @@ QPushButton#deleteTaskButton {
     font-weight: 700;
 }
 
+/* Наведение на кнопку удаления */
 QPushButton#deleteTaskButton:hover {
     background: qlineargradient(
         x1:0, y1:0,
@@ -133,86 +80,47 @@ QPushButton#deleteTaskButton:hover {
     );
 }
 
+/* Нажатие на кнопку удаления */
 QPushButton#deleteTaskButton:pressed {
     background: #a93226;
 }
 
-
-/* ===============================
-   PRIORITY BADGES
-   =============================== */
-
-
-/* Низкий */
+/* Бейдж низкого приоритета */
 QLabel#priorityLow {
-
     background-color: #2ecc71;
-
     color: white;
-
     border-radius: 12px;
-
     padding: 4px 12px;
-
     font-size: 12px;
-
     font-weight: bold;
-
 }
 
-
-
-/* Средний */
+/* Бейдж среднего приоритета */
 QLabel#priorityMedium {
-
     background-color: #f39c12;
-
     color: white;
-
     border-radius: 12px;
-
     padding: 4px 12px;
-
     font-size: 12px;
-
     font-weight: bold;
-
 }
 
-
-
-/* Критичный */
+/* Бейдж критичного приоритета */
 QLabel#priorityCritical {
-
     background-color: #e74c3c;
-
     color: white;
-
     border-radius: 12px;
-
     padding: 4px 12px;
-
     font-size: 12px;
-
     font-weight: bold;
-
 }
 
-
-
-/* Блокер */
+/* Бейдж приоритета-блокера */
 QLabel#priorityBlocker {
-
     background-color: #9b59b6;
-
     color: white;
-
     border-radius: 12px;
-
     padding: 4px 12px;
-
     font-size: 12px;
-
     font-weight: bold;
-
 }
