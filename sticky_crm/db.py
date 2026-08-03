@@ -1063,43 +1063,61 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
         conn.close()
 
 
-def update_task(task_id, title, description, executor_id, status, priority, deadline, observers_ids, tag_ids):
-    """Обновить задачу."""
+def update_task(task_id, title=None, description=None, executor_id=None, status=None, priority=None, deadline=None, observers_ids=None, tag_ids=None):
+    """Обновить задачу. Параметры могут быть None для частичного обновления."""
     conn = get_connection()
     if not conn:
         return False
     try:
         cursor = conn.cursor()
         
-        # Обновляем основную информацию о задаче
-        cursor.execute("""
-            UPDATE tasks
-            SET
-                title=%s,
-                description=%s,
-                executor_id=%s,
-                status=%s,
-                priority=%s,
-                deadline=%s,
-                updated_at=CURRENT_TIMESTAMP
-            WHERE id=%s
-        """, (title, description, executor_id, status, priority, deadline, task_id))
+        # Формируем динамический SQL для частичного обновления
+        updates = []
+        params = []
         
-        # Удаляем старых наблюдателей и добавляем новых
-        cursor.execute("DELETE FROM task_observers WHERE task_id=%s", (task_id,))
-        for obs_id in observers_ids:
-            cursor.execute(
-                "INSERT INTO task_observers (task_id, employee_id) VALUES (%s, %s)",
-                (task_id, obs_id)
-            )
+        if title is not None:
+            updates.append("title=%s")
+            params.append(title)
+        if description is not None:
+            updates.append("description=%s")
+            params.append(description)
+        if executor_id is not None:
+            updates.append("executor_id=%s")
+            params.append(executor_id)
+        if status is not None:
+            updates.append("status=%s")
+            params.append(status)
+        if priority is not None:
+            updates.append("priority=%s")
+            params.append(priority)
+        if deadline is not None:
+            updates.append("deadline=%s")
+            params.append(deadline)
         
-        # Удаляем старые теги и добавляем новые
-        cursor.execute("DELETE FROM task_tags_link WHERE task_id=%s", (task_id,))
-        for tag_id in tag_ids:
-            cursor.execute(
-                "INSERT INTO task_tags_link (task_id, tag_id) VALUES (%s, %s)",
-                (task_id, tag_id)
-            )
+        if updates:
+            updates.append("updated_at=CURRENT_TIMESTAMP")
+            params.append(task_id)
+            
+            sql = f"UPDATE tasks SET {', '.join(updates)} WHERE id=%s"
+            cursor.execute(sql, tuple(params))
+        
+        # Обновляем наблюдателей, если переданы
+        if observers_ids is not None:
+            cursor.execute("DELETE FROM task_observers WHERE task_id=%s", (task_id,))
+            for obs_id in observers_ids:
+                cursor.execute(
+                    "INSERT INTO task_observers (task_id, employee_id) VALUES (%s, %s)",
+                    (task_id, obs_id)
+                )
+        
+        # Обновляем теги, если переданы
+        if tag_ids is not None:
+            cursor.execute("DELETE FROM task_tags_link WHERE task_id=%s", (task_id,))
+            for tag_id in tag_ids:
+                cursor.execute(
+                    "INSERT INTO task_tags_link (task_id, tag_id) VALUES (%s, %s)",
+                    (task_id, tag_id)
+                )
         
         conn.commit()
         return True
