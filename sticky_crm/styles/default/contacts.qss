@@ -1,24 +1,24 @@
 #contactsLeftPanel {
-    background: #171d27;
-    border-right: 1px solid #313a49;
+    background: #17212b;
+    border-right: 1px solid #263442;
 }
 
 #contactsTitle {
-    color: white;
-    font-size: 19px;
+    color: #f5f8fc;
+    font-size: 21px;
     font-weight: 700;
 }
 
 #contactsSearch {
-    background: #222c3b;
+    background: #263442;
     color: white;
-    border: 2px solid #313a49;
-    border-radius: 12px;
-    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 18px;
+    padding: 9px 12px;
 }
 
 #contactsSearch:focus {
-    border: 2px solid #5b8cff;
+    border: 1px solid #3390ec;
 }
 
 #contactsList {
@@ -28,8 +28,9 @@
 }
 
 #contactsList::item {
-    border-radius: 10px;
-    padding: 12px;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin: 1px 0;
 }
 
 #contactsList::item:hover {
@@ -37,12 +38,7 @@
 }
 
 #contactsList::item:selected {
-    background: qlineargradient(
-        x1:0, y1:0,
-        x2:1, y2:0,
-        stop:0 #5b8cff,
-        stop:1 #6f6dff
-    );
+    background: #2b5278;
 }
 
 #createGroupBtn {
@@ -53,8 +49,10 @@
         stop:0 #5b8cff,
         stop:1 #6f6dff
     );
-    border-radius: 12px;
-    margin-top: 8px;
+    border-radius: 18px;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
 }
 #createGroupBtn:hover {
     background: qlineargradient(
@@ -113,3 +111,15 @@
     font-size: 12px;
     font-weight: bold;
 }
+
+/* Message search field */
+#messageSearch {
+    min-height: 34px;
+    max-width: 300px;
+    padding: 0 12px;
+    border: 1px solid #d8e2ef;
+    border-radius: 17px;
+    background: #f4f7fb;
+    color: #203040;
+}
+#messageSearch:focus { border: 1px solid #3390ec; background: #ffffff; }

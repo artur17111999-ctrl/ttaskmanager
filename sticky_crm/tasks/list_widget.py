@@ -243,7 +243,8 @@ class TasksWidget(QWidget):
                 pass
         
         layout = QVBoxLayout(card)
-        layout.setSpacing(8)
+        layout.setSpacing(7)
+        layout.setContentsMargins(16, 13, 16, 13)
         
         header_layout = QHBoxLayout()
         
@@ -268,6 +269,7 @@ class TasksWidget(QWidget):
         status_label = QLabel(status_text)
         status_label.setObjectName("taskStatusLabel")
         header_layout.addWidget(status_label)
+        header_layout.addStretch()
         
         priority_class_map = {
             "Низкий": "priorityLow",
@@ -292,6 +294,7 @@ class TasksWidget(QWidget):
         desc_label = QLabel(desc)
         desc_label.setObjectName("taskDescriptionLabel")
         desc_label.setWordWrap(True)
+        desc_label.setVisible(False)
         layout.addWidget(desc_label)
         
         info_layout = QHBoxLayout()
@@ -313,11 +316,18 @@ class TasksWidget(QWidget):
             else:
                 info_layout.addWidget(deadline_label)
         
+        tags = task_data.get('tags') or []
+        if tags:
+            tags_label = QLabel("  ".join(f"#{tag['name']}" for tag in tags[:3]))
+            tags_label.setObjectName("taskTagsLabel")
+            info_layout.addWidget(tags_label)
+
         info_layout.addStretch()
         
         author_name = task_data.get('author_name', 'Неизвестно')
         author_label = QLabel(f"Автор: {author_name}")
         author_label.setObjectName("authorInfoLabel")
+        author_label.setVisible(False)
         info_layout.addWidget(author_label)
         
         if task_data.get('author_id') == self.current_user_id:

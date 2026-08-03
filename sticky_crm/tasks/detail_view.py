@@ -5,7 +5,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QTextEdit, QLineEdit, QComboBox, QDateEdit, QListWidget, QListWidgetItem,
-    QMessageBox, QFormLayout, QGroupBox, QFrame, QSizePolicy, QMenu, QApplication, QDialog
+    QMessageBox, QFormLayout, QGroupBox, QFrame, QSizePolicy, QMenu, QApplication, QDialog, QCompleter, QInputDialog
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor, QClipboard
@@ -70,12 +70,13 @@ class TaskDetailView(QWidget):
         
         desc_group = QGroupBox("Описание")
         desc_layout = QVBoxLayout(desc_group)
-        self.desc_text = QTextEdit()
+        self.desc_text = ScreenshotTextEdit()
         self.desc_text.setObjectName("descriptionEdit")
         self.desc_text.setPlaceholderText("Введите подробное описание задачи")
         self.desc_text.setMinimumHeight(150)
         self.desc_text.setTextInteractionFlags(Qt.TextEditorInteraction)
         desc_layout.addWidget(self.desc_text)
+        desc_layout.addWidget(ScreenshotPreview(self.desc_text))
         self.task_images_widget = QWidget()
         self.task_images_layout = QVBoxLayout(self.task_images_widget)
         self.task_images_layout.setContentsMargins(0, 8, 0, 0)
@@ -94,6 +95,9 @@ class TaskDetailView(QWidget):
         
         self.executor_combo = QComboBox()
         self.executor_combo.setObjectName("executorCombo")
+        self.executor_combo.setEditable(True)
+        self.executor_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.executor_combo.lineEdit().setPlaceholderText("Начните вводить ФИО")
         info_layout.addRow("Исполнитель:", self.executor_combo)
         
         self.status_combo = QComboBox()
@@ -118,14 +122,24 @@ class TaskDetailView(QWidget):
         observers_layout = QVBoxLayout(self.observers_group)
         self.observers_list = QListWidget()
         self.observers_list.setMaximumHeight(100)
+        self.observers_search = QLineEdit()
+        self.observers_search.setObjectName("selectionSearchEdit")
+        self.observers_search.setPlaceholderText("Поиск по ФИО наблюдателя")
+        self.observers_search.textChanged.connect(self.filter_observers)
+        observers_layout.addWidget(self.observers_search)
         observers_layout.addWidget(self.observers_list)
         content_layout.addWidget(self.observers_group)
         
         self.tags_group = QGroupBox("Теги")
         tags_layout = QVBoxLayout(self.tags_group)
         self.tags_list = QListWidget()
-        self.tags_list.setSelectionMode(QListWidget.MultiSelection)
+        self.tags_list.setSelectionMode(QListWidget.NoSelection)
         self.tags_list.setMaximumHeight(100)
+        self.tags_search = QLineEdit()
+        self.tags_search.setObjectName("selectionSearchEdit")
+        self.tags_search.setPlaceholderText("Поиск тегов")
+        self.tags_search.textChanged.connect(self.filter_tags)
+        tags_layout.addWidget(self.tags_search)
         tags_layout.addWidget(self.tags_list)
         
         tags_buttons_layout = QHBoxLayout()
@@ -278,6 +292,10 @@ class TaskDetailView(QWidget):
             return
 
         self.executor_combo.clear()
+        completer = QCompleter(self.executor_combo.model(), self.executor_combo)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.executor_combo.setCompleter(completer)
         self.observers_list.clear()
         executor_name = self.task_data.get('executor_name', '')
         observer_names = set(self.task_data.get('observers', []))
@@ -290,6 +308,12 @@ class TaskDetailView(QWidget):
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if employee['name'] in observer_names else Qt.Unchecked)
             self.observers_list.addItem(item)
+
+    def filter_observers(self, text):
+        query = text.strip().casefold()
+        for index in range(self.observers_list.count()):
+            item = self.observers_list.item(index)
+            item.setHidden(bool(query) and query not in item.text().casefold())
 
     def load_statuses(self):
         from db import get_all_statuses
@@ -335,8 +359,15 @@ class TaskDetailView(QWidget):
             item.setData(TAG_COLOR_ROLE, color)
             if color:
                 item.setForeground(QColor(color))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if name in selected_names else Qt.Unchecked)
             self.tags_list.addItem(item)
-            item.setSelected(name in selected_names)
+
+    def filter_tags(self, text):
+        query = text.strip().casefold()
+        for index in range(self.tags_list.count()):
+            item = self.tags_list.item(index)
+            item.setHidden(bool(query) and query not in item.text().casefold())
 
     def create_new_tag(self):
         from db import create_tag
@@ -358,7 +389,8 @@ class TaskDetailView(QWidget):
         item.setData(TAG_COLOR_ROLE, "#808080")
         item.setForeground(QColor("#808080"))
         self.tags_list.addItem(item)
-        item.setSelected(True)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Checked)
         self.new_tag_edit.clear()
 
     def load_comments(self):
@@ -391,6 +423,18 @@ class TaskDetailView(QWidget):
             text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             card_layout.addWidget(author_label)
             card_layout.addWidget(text_label)
+            if comment['author_id'] == self.current_user_id:
+                actions = QHBoxLayout()
+                edit_button = QPushButton("Редактировать")
+                delete_button = QPushButton("Удалить")
+                edit_button.setObjectName("commentActionButton")
+                delete_button.setObjectName("commentDeleteButton")
+                edit_button.clicked.connect(lambda checked=False, item=comment: self.edit_comment(item))
+                delete_button.clicked.connect(lambda checked=False, item=comment: self.delete_comment(item))
+                actions.addStretch()
+                actions.addWidget(edit_button)
+                actions.addWidget(delete_button)
+                card_layout.addLayout(actions)
             add_image_previews(card_layout, get_image_attachments('comment', comment['id']))
             self.comments_container_layout.addWidget(card)
 
@@ -413,10 +457,32 @@ class TaskDetailView(QWidget):
         self.comment_edit.clear_screenshots()
         self.load_comments()
 
+    def edit_comment(self, comment):
+        from db import update_task_comment
+        text, accepted = QInputDialog.getMultiLineText(self, "Редактирование комментария", "Комментарий:", comment['text'])
+        text = text.strip()
+        if not accepted or not text:
+            return
+        if update_task_comment(comment['id'], self.current_user_id, text):
+            self.load_comments()
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось изменить комментарий")
+
+    def delete_comment(self, comment):
+        from db import delete_task_comment
+        answer = QMessageBox.question(self, "Удаление комментария", "Удалить этот комментарий?")
+        if answer != QMessageBox.Yes:
+            return
+        if delete_task_comment(comment['id'], self.current_user_id):
+            self.load_comments()
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось удалить комментарий")
+
     def save_task(self):
         from db import update_task
         title = self.title_edit.text().strip()
         description = self.desc_text.toPlainText().strip()
+        images = self.desc_text.screenshots
         executor_id = self.executor_combo.currentData()
         if not title:
             QMessageBox.warning(self, "Ошибка", "Введите название задачи")
@@ -433,7 +499,9 @@ class TaskDetailView(QWidget):
             for index in range(self.observers_list.count())
             if self.observers_list.item(index).checkState() == Qt.Checked
         ]
-        tag_ids = [item.data(TAG_ID_ROLE) for item in self.tags_list.selectedItems()]
+        tag_ids = [self.tags_list.item(index).data(TAG_ID_ROLE)
+                   for index in range(self.tags_list.count())
+                   if self.tags_list.item(index).checkState() == Qt.Checked]
         try:
             success = update_task(
                 task_id=self.task_id, title=title, description=description,
@@ -443,6 +511,9 @@ class TaskDetailView(QWidget):
                 status_id=self.status_combo.currentData(),
                 priority_id=self.priority_combo.currentData(),
             )
+            if success and images:
+                from db import add_image_attachments
+                success = add_image_attachments('task', self.task_id, images)
         except Exception as error:
             QMessageBox.critical(self, "Ошибка", f"Не удалось обновить задачу:\n{error}")
             return

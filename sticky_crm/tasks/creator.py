@@ -60,6 +60,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         
         # Левая часть - основная информация
         left_widget = QWidget()
+        left_widget.setObjectName("taskMainPanel")
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 10, 0)
         left_layout.setSpacing(15)
@@ -87,6 +88,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         
         # Правая часть - дополнительная информация
         right_widget = QWidget()
+        right_widget.setObjectName("taskSidePanel")
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(10, 0, 0, 0)
         right_layout.setSpacing(15)
@@ -99,6 +101,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         right_layout.addWidget(QLabel("Исполнитель:"))
         self.executor_combo = QComboBox()
         self.executor_combo.setObjectName("executorCombo")
+        self.make_employee_combo_searchable(self.executor_combo)
         right_layout.addWidget(self.executor_combo)
         
         right_layout.addWidget(QLabel("Статус:"))
@@ -114,14 +117,20 @@ class TaskCreatorWidget(TaskBaseWidget):
         right_layout.addWidget(QLabel("Наблюдатели:"))
         self.observers_list = QListWidget()
         self.observers_list.setObjectName("observersList")
+        self.observers_list.setMaximumHeight(150)
+        self.observers_search = self.add_list_search(
+            right_layout, self.observers_list, "Поиск по ФИО наблюдателя"
+        )
         right_layout.addWidget(self.observers_list)
         
         right_layout.addWidget(QLabel("Теги:"))
         tags_layout = QVBoxLayout()
         
         self.tags_list = QListWidget()
-        self.tags_list.setSelectionMode(QListWidget.MultiSelection)
+        self.tags_list.setSelectionMode(QListWidget.NoSelection)
         self.tags_list.setObjectName("tagsList")
+        self.tags_list.setMaximumHeight(150)
+        self.tags_search = self.add_list_search(tags_layout, self.tags_list, "Поиск тегов")
         tags_layout.addWidget(self.tags_list)
         
         create_tag_layout = QHBoxLayout()
@@ -215,6 +224,8 @@ class TaskCreatorWidget(TaskBaseWidget):
             item.setData(TAG_ID_ROLE, tag_id)
             item.setData(TAG_COLOR_ROLE, "#808080")
             item.setForeground(QColor("#808080"))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)
             self.tags_list.addItem(item)
             self.new_tag_edit.clear()
         else:
@@ -254,9 +265,7 @@ class TaskCreatorWidget(TaskBaseWidget):
                 observers_ids.append(item.data(EMPLOYEE_ID_ROLE))
         
         # Получаем теги
-        selected_tag_ids = []
-        for item in self.tags_list.selectedItems():
-            selected_tag_ids.append(item.data(TAG_ID_ROLE))
+        selected_tag_ids = self.checked_item_data(self.tags_list, TAG_ID_ROLE)
         
         # Получаем статус и приоритет (ID)
         status_id = self.status_combo.currentData()
@@ -322,7 +331,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         
         for i in range(self.tags_list.count()):
             item = self.tags_list.item(i)
-            item.setSelected(False)
+            item.setCheckState(Qt.Unchecked)
     
     def go_back(self):
         """Вернуться к списку задач."""

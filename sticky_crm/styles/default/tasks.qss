@@ -1,4 +1,45 @@
 /* Карточка задачи */
+QGroupBox {
+    background-color: #1e2938;
+    border: 1px solid #3a4658;
+    border-radius: 12px;
+    margin-top: 13px;
+    padding: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 5px;
+    color: #c8d4e3;
+}
+
+QWidget#taskMainPanel, QWidget#taskSidePanel {
+    background-color: #1e2938;
+    border: 1px solid #3a4658;
+    border-radius: 12px;
+}
+
+QLineEdit#selectionSearchEdit {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid #3a4658;
+    border-radius: 7px;
+    background: #18222d;
+    color: white;
+}
+
+QLineEdit#selectionSearchEdit:focus {
+    border-color: #3390ec;
+}
+
+QLabel#taskTagsLabel {
+    color: #78b7ff;
+    font-size: 12px;
+}
+
 QFrame#taskCard {
     background-color: #1e2938;
     border: 1px solid #3a4658;
@@ -206,6 +247,17 @@ QPushButton#sendCommentButton:hover {
 
 QPushButton#sendCommentButton:pressed {
     background: #1e5f99;
+}
+
+QPushButton#commentActionButton, QPushButton#commentDeleteButton {
+    padding: 3px 8px;
+    border-radius: 5px;
+    color: #c8d4e3;
+    background: #263548;
+}
+
+QPushButton#commentDeleteButton:hover {
+    background: #a33b3b;
 }
 
 /* Карточка комментария */

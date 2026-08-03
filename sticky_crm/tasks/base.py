@@ -2,7 +2,7 @@
 Базовый класс и общие утилиты для виджетов задач.
 """
 
-from PySide6.QtWidgets import QWidget, QMessageBox, QListWidgetItem
+from PySide6.QtWidgets import QComboBox, QWidget, QMessageBox, QListWidgetItem, QLineEdit, QCompleter
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 
@@ -130,12 +130,40 @@ class TaskBaseWidget(QWidget):
                 item.setForeground(QColor(tag[2]))
             
             # Выбираем текущие теги
-            if tag[1] in selected_tag_names:
-                item.setSelected(True)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if tag[1] in selected_tag_names else Qt.Unchecked)
             
             list_widget.addItem(item)
         
         return True
+
+    @staticmethod
+    def make_employee_combo_searchable(combo_box):
+        """Enable Yandex Tracker-like matching by full name in employee selectors."""
+        combo_box.setEditable(True)
+        combo_box.setInsertPolicy(QComboBox.NoInsert)
+        combo_box.lineEdit().setPlaceholderText("Начните вводить ФИО")
+        completer = QCompleter(combo_box.model(), combo_box)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        combo_box.setCompleter(completer)
+
+    @staticmethod
+    def add_list_search(layout, list_widget, placeholder):
+        search_edit = QLineEdit()
+        search_edit.setObjectName("selectionSearchEdit")
+        search_edit.setPlaceholderText(placeholder)
+        search_edit.textChanged.connect(lambda text: [
+            list_widget.item(index).setHidden(bool(text.strip()) and text.strip().casefold() not in list_widget.item(index).text().casefold())
+            for index in range(list_widget.count())
+        ])
+        layout.addWidget(search_edit)
+        return search_edit
+
+    @staticmethod
+    def checked_item_data(list_widget, role):
+        return [list_widget.item(i).data(role) for i in range(list_widget.count())
+                if list_widget.item(i).checkState() == Qt.Checked]
     
     def create_tag(self, tag_name):
         """Создать новый тег в БД."""

@@ -4,7 +4,7 @@
     color: white;
     font-size: 16px;
     font-weight: 600;
-    padding: 12px;
+    padding: 0;
 }
 
 #chatHeaderPanel {
@@ -45,7 +45,7 @@ QLabel#selectedCountLabel {
 
 /* Сама QScrollArea – прозрачная */
 QScrollArea#messageArea {
-    background: transparent;
+    background: #0e1621;
     border: none;
 }
 
@@ -54,16 +54,16 @@ QScrollArea#messageArea {
     background: qlineargradient(
         x1:0, y1:0,
         x2:0, y2:1,
-        stop:0 #101820,
-        stop:1 #0e141b
+        stop:0 #0e1621,
+        stop:1 #17212b
     );
 }
 
 #messageInput {
-    background: #17212b;
+    background: #263442;
     color: white;
     border: 1px solid #263442;
-    border-radius: 18px;
+    border-radius: 20px;
     padding: 10px 14px;
     font-size: 10.5pt;
 }
@@ -76,7 +76,7 @@ QScrollArea#messageArea {
     background: #3390ec;
     color: white;
     border: none;
-    border-radius: 50%;
+    border-radius: 22px;
     min-width: 42px;
     min-height: 42px;
 }

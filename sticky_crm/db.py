@@ -41,6 +41,35 @@ def get_image_attachments(owner_type, owner_id):
         conn.close()
 
 
+def get_message_attachments(message_ids):
+    """Return message attachments in one query instead of one connection per bubble."""
+    if not message_ids:
+        return {}
+    conn = get_connection()
+    if not conn:
+        return {}
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_image_attachments_table(cursor)
+        cursor.execute(
+            "SELECT owner_id, image_data FROM image_attachments "
+            "WHERE owner_type = 'message' AND owner_id = ANY(%s) ORDER BY id",
+            (list(message_ids),),
+        )
+        result = {}
+        for message_id, image in cursor.fetchall():
+            result.setdefault(message_id, []).append(bytes(image))
+        return result
+    except Exception as error:
+        print(f"Failed to load message screenshots: {error}")
+        return {}
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
 def add_image_attachments(owner_type, owner_id, images):
     if not images:
         return True
@@ -458,6 +487,47 @@ def get_chat_messages(chat_id, limit=50, offset=0, order_desc=False):
         conn.close()
 
 
+def search_chat_messages(chat_id, query, limit=500):
+    """Search a chat by message text or a date written as DD.MM or DD.MM.YYYY."""
+    query = (query or "").strip()
+    if not query:
+        return get_chat_messages(chat_id, limit=limit)
+    conn = get_connection()
+    if not conn:
+        return []
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT m.id, m.sender_id, e.last_name || ' ' || e.first_name,
+                   m.message_text, m.created_at, m.is_read, m.is_deleted, m.edited_at,
+                   m.is_forwarded, m.forwarded_from, m.forwarded_at
+            FROM messages m
+            JOIN employees e ON m.sender_id = e.id
+            WHERE m.chat_id = %s
+              AND (m.message_text ILIKE %s
+                   OR to_char(m.created_at, 'DD.MM.YYYY') ILIKE %s
+                   OR to_char(m.created_at, 'DD.MM') ILIKE %s)
+            ORDER BY m.created_at ASC
+            LIMIT %s
+        """, (chat_id, f"%{query}%", f"%{query}%", f"%{query}%", limit))
+        return [{
+            'id': row[0], 'sender_id': row[1], 'sender_name': row[2],
+            'text': row[3], 'time': row[4].strftime('%H:%M') if row[4] else '',
+            'is_read': row[5], 'is_deleted': row[6],
+            'edited_at': row[7].strftime('%H:%M') if row[7] else None,
+            'is_forwarded': row[8], 'forwarded_from': row[9],
+            'forwarded_at': row[10].strftime('%H:%M') if row[10] else None,
+        } for row in cursor.fetchall()]
+    except Exception as error:
+        print(f"Ошибка поиска сообщений: {error}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
 def send_message(chat_id, sender_id, text, images=None):
     conn = get_connection()
     if not conn:
@@ -472,24 +542,21 @@ def send_message(chat_id, sender_id, text, images=None):
         _save_image_attachments(cursor, 'message', message_id, images)
         conn.commit()
 
-        # Уведомление для личных чатов
-        cursor.execute("SELECT is_group FROM chats WHERE id = %s", (chat_id,))
-        is_group = cursor.fetchone()[0]
-        if not is_group:
-            cursor.execute("""
-                           SELECT cm.employee_id
-                           FROM chat_members cm
-                           WHERE cm.chat_id = %s
-                             AND cm.employee_id != %s
-                           """, (chat_id, sender_id))
-            receiver = cursor.fetchone()
-            if receiver:
-                receiver_id = receiver[0]
-                cursor.execute("SELECT last_name, first_name FROM employees WHERE id = %s", (sender_id,))
-                sender_info = cursor.fetchone()
-                sender_name = f"{sender_info[0]} {sender_info[1]}"
+        # Notify every other member.  This applies to groups as well as personal chats.
+        cursor.execute("""
+                       SELECT cm.employee_id
+                       FROM chat_members cm
+                       WHERE cm.chat_id = %s AND cm.employee_id != %s
+                       """, (chat_id, sender_id))
+        receivers = [row[0] for row in cursor.fetchall()]
+        if receivers:
+            cursor.execute("SELECT last_name, first_name FROM employees WHERE id = %s", (sender_id,))
+            sender_info = cursor.fetchone()
+            sender_name = f"{sender_info[0]} {sender_info[1]}" if sender_info else "Пользователь"
+            preview = text[:50] if text else "📎 Вложение"
+            for receiver_id in receivers:
                 create_notification(receiver_id, chat_id, message_id,
-                                    f"Новое сообщение от {sender_name}: {text[:50]}")
+                                    f"Новое сообщение от {sender_name}: {preview}")
         return True
     except Exception as e:
         conn.rollback()
@@ -704,20 +771,21 @@ def mark_messages_as_read(chat_id, user_id):
         cursor.close()
         conn.close()
 
-def edit_message(message_id, new_text):
+def edit_message(message_id, new_text, sender_id=None):
     """Редактировать сообщение. Возвращает True/False."""
     conn = get_connection()
     if not conn:
         return False
     try:
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE messages 
-            SET message_text = %s, edited_at = NOW()
-            WHERE id = %s
-        """, (new_text, message_id))
+        query = "UPDATE messages SET message_text = %s, edited_at = NOW() WHERE id = %s AND is_deleted = FALSE"
+        params = [new_text, message_id]
+        if sender_id is not None:
+            query += " AND sender_id = %s"
+            params.append(sender_id)
+        cursor.execute(query, params)
         conn.commit()
-        return True
+        return cursor.rowcount == 1
     except Exception as e:
         conn.rollback()
         print(f"Ошибка редактирования: {e}")
@@ -726,23 +794,26 @@ def edit_message(message_id, new_text):
         cursor.close()
         conn.close()
 
-def delete_message(message_id):
+def delete_message(message_id, sender_id=None):
     """Полное удаление сообщения."""
     conn = get_connection()
     if not conn:
         return False
     try:
         cursor = conn.cursor()
-        # Сначала удаляем связанные уведомления
-        cursor.execute("""
-            DELETE FROM notifications
-            WHERE message_id = %s
-        """, (message_id,))
-        # Затем удаляем само сообщение
-        cursor.execute("""
-            DELETE FROM messages
-            WHERE id = %s
-        """, (message_id,))
+        query = "SELECT id FROM messages WHERE id = %s FOR UPDATE"
+        params = [message_id]
+        if sender_id is not None:
+            query = "SELECT id FROM messages WHERE id = %s AND sender_id = %s FOR UPDATE"
+            params.append(sender_id)
+        cursor.execute(query, params)
+        if not cursor.fetchone():
+            conn.rollback()
+            return False
+        # Remove dependent rows first, then the message itself (hard delete).
+        cursor.execute("DELETE FROM notifications WHERE message_id = %s", (message_id,))
+        cursor.execute("DELETE FROM image_attachments WHERE owner_type = 'message' AND owner_id = %s", (message_id,))
+        cursor.execute("DELETE FROM messages WHERE id = %s", (message_id,))
         conn.commit()
         return True
     except Exception as e:
@@ -979,6 +1050,7 @@ def forward_messages(target_chat_id, sender_id, messages_to_forward):
         return False
     try:
         cursor = conn.cursor()
+        _ensure_image_attachments_table(cursor)
         
         # Получаем информацию о текущем пользователе для отображения
         cursor.execute("SELECT last_name, first_name FROM employees WHERE id = %s", (sender_id,))
@@ -998,9 +1070,18 @@ def forward_messages(target_chat_id, sender_id, messages_to_forward):
             
             # Вставляем сообщение в целевой чат
             cursor.execute(
-                "INSERT INTO messages (chat_id, sender_id, message_text, is_forwarded, forwarded_from, forwarded_at) VALUES (%s, %s, %s, TRUE, %s, %s)",
+                "INSERT INTO messages (chat_id, sender_id, message_text, is_forwarded, forwarded_from, forwarded_at) "
+                "VALUES (%s, %s, %s, TRUE, %s, %s) RETURNING id",
                 (target_chat_id, sender_id, forwarded_text, original_sender, current_time)
             )
+            forwarded_message_id = cursor.fetchone()[0]
+            # Copy every screenshot in the same transaction as the forwarded message.
+            cursor.execute(
+                "SELECT image_data FROM image_attachments WHERE owner_type = 'message' AND owner_id = %s ORDER BY id",
+                (msg['id'],),
+            )
+            images = [bytes(row[0]) for row in cursor.fetchall()]
+            _save_image_attachments(cursor, 'message', forwarded_message_id, images)
         
         conn.commit()
         return True
@@ -1639,7 +1720,7 @@ def update_task_comment(comment_id, user_id, new_text):
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE task_comments
-            SET text = %s, updated_at = CURRENT_TIMESTAMP
+            SET comment_text = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s AND author_id = %s
         """, (new_text, comment_id, user_id))
         conn.commit()
@@ -1665,6 +1746,8 @@ def delete_task_comment(comment_id, user_id):
             DELETE FROM task_comments
             WHERE id = %s AND author_id = %s
         """, (comment_id, user_id))
+        if cursor.rowcount:
+            cursor.execute("DELETE FROM image_attachments WHERE owner_type = 'comment' AND owner_id = %s", (comment_id,))
         conn.commit()
         success = cursor.rowcount > 0
         return success
