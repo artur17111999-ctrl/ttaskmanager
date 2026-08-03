@@ -352,8 +352,7 @@ class TaskCreatorWidget(QWidget):
                 deadline=deadline,
                 priority=priority,
                 tag_ids=selected_tag_ids,
-                creator_id=self.current_user_id,
-                attachments=self.attached_files
+                creator_id=self.current_user_id
             )
         except Exception as e:
             QMessageBox.critical(
