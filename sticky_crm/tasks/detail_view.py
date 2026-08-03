@@ -246,3 +246,7 @@ class TaskDetailView(QWidget):
         
         is_author = self.task_data.get('author_id') == self.current_user_id
         self.delete_btn.setVisible(is_author)
+
+    def go_back(self):
+        """Return to the task list."""
+        self.backRequested.emit()
