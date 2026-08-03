@@ -326,58 +326,37 @@ class MessageBubble(QFrame):
         # Определяем режим: есть ли выделенные сообщения
         selection_mode = area and len(area.selected_messages) > 0
         
-        # Получаем доступ к ContactsWidget для управления кнопками
-        parent_widget = self.window()
-        while parent_widget and not isinstance(parent_widget, ContactsWidget):
-            parent_widget = parent_widget.parentWidget()
+        if selection_mode:
+            # Во время режима выделения вообще не показываем меню
+            return
         
         menu = QMenu(self)
         
-        if selection_mode:
-            # Режим множественного выделения
-            menu.addAction("✉ Переслать выделенные",
-                           lambda: self._forward_selected_from_menu(parent_widget))
-            
-            menu.addAction("🗑 Удалить выделенные",
-                           lambda: self._delete_selected_from_menu(parent_widget))
-            
-            menu.addSeparator()
-            
-            if self.is_selected:
-                menu.addAction("Снять выделение",
-                               lambda: self.toggle_selection())
-            else:
-                menu.addAction("Выделить сообщение",
-                               lambda: self.toggle_selection())
-        else:
-            # Обычный режим - контекстное меню для одного сообщения
-            if self.is_own and not self.msg_data.get("is_deleted"):
-                menu.addAction("✏️ Редактировать",
-                               lambda: self.editRequested.emit(
-                                   self.message_id,
-                                   self.msg_data["text"]))
-            
-            if not self.msg_data.get("is_deleted"):
-                menu.addAction("🗑 Удалить сообщение",
-                               lambda: self.deleteRequested.emit(self.message_id))
-            
-            menu.addSeparator()
-            
-            menu.addAction("Выделить сообщение",
-                           lambda: self.toggle_selection())
+        # обычное меню одного сообщения
+        if self.is_own and not self.msg_data.get("is_deleted"):
+            menu.addAction(
+                "✏️ Редактировать",
+                lambda: self.editRequested.emit(
+                    self.message_id,
+                    self.msg_data["text"]
+                )
+            )
+        
+        if not self.msg_data.get("is_deleted"):
+            menu.addAction(
+                "🗑 Удалить сообщение",
+                lambda: self.deleteRequested.emit(self.message_id)
+            )
+        
+        menu.addSeparator()
+        
+        menu.addAction(
+            "Выделить сообщение",
+            lambda: self.toggle_selection()
+        )
         
         menu.exec(self.mapToGlobal(position))
     
-    def _delete_selected_from_menu(self, parent_widget):
-        """Вызвать удаление выделенных сообщений через родительский виджет."""
-        if parent_widget and hasattr(parent_widget, 'delete_selected_messages'):
-            parent_widget.delete_selected_messages()
-    
-    def _forward_selected_from_menu(self, parent_widget):
-        """Вызвать пересылку выделенных сообщений через родительский виджет."""
-        if parent_widget and hasattr(parent_widget, 'forward_selected_messages'):
-            parent_widget.forward_selected_messages()
-
     def mousePressEvent(self, event):
         # Обработка правой кнопки мыши - Qt сам вызовет customContextMenuRequested
         if event.button() == Qt.RightButton:
@@ -385,7 +364,8 @@ class MessageBubble(QFrame):
             return
         elif event.button() == Qt.LeftButton:
             # Проверяем, где произошёл клик, используя координаты относительно bubble
-            if self.bubble.geometry().contains(event.pos()):
+            bubble_rect = self.bubble.geometry()
+            if bubble_rect.contains(event.pos()):
                 # Клик по пузырю сообщения - обычный клик, не выделяем
                 super().mousePressEvent(event)
             else:
@@ -403,6 +383,8 @@ class MessageBubble(QFrame):
         self.selectionChanged.emit(self.is_selected)
 
     def enter_edit_mode(self, current_text):
+        if self.msg_data.get("is_deleted"):
+            return
         self.edit_input = QLineEdit(current_text)
         self.edit_input.setObjectName("editInput")
         layout = self.bubble.layout()
@@ -739,6 +721,7 @@ class ContactsWidget(QWidget):
         self.message_input.clear()
 
         self.current_chat_id = chat_id
+        self.last_message_id = 0
         self.current_chat_name = name
         self.current_chat_type = chat_type
         self.chat_header.setText(name)
@@ -838,6 +821,10 @@ class ContactsWidget(QWidget):
         if not area:
             return
 
+        # Обновляем существующие сообщения (для удаления, редактирования, прочтения)
+        messages = get_chat_messages(self.current_chat_id)
+        self._update_existing_bubbles(area, messages)
+
         # Получаем только новые сообщения (ID > last_message_id)
         # Для этого доработаем db.py, добавив get_new_messages(chat_id, last_id)
         new_messages = get_new_messages(self.current_chat_id, self.last_message_id)
@@ -879,6 +866,15 @@ class ContactsWidget(QWidget):
                         w.update_status_icon()
                     if hasattr(w, 'edited_label'):
                         w.edited_label.setVisible(bool(updated.get('edited_at')))
+        
+        # Удаляем сообщения, которых больше нет в базе (были удалены)
+        for i in reversed(range(area.messages_layout.count())):
+            item = area.messages_layout.itemAt(i)
+            if item and item.widget():
+                w = item.widget()
+                if isinstance(w, MessageBubble) and w.message_id not in msg_dict:
+                    area.messages_layout.removeWidget(w)
+                    w.deleteLater()
 
     def eventFilter(self, obj, event):
         if obj == self.message_input:
@@ -1062,7 +1058,13 @@ class ContactsWidget(QWidget):
         if not area or not hasattr(area, 'selected_messages'):
             return
         
-        selected_ids = list(area.selected_messages)
+        # Считаем только свои сообщения для подтверждения
+        selected_ids = []
+        for msg_id in area.selected_messages:
+            bubble = self.find_message_bubble(msg_id)
+            if bubble and bubble.is_own:
+                selected_ids.append(msg_id)
+        
         if not selected_ids:
             return
         
@@ -1075,14 +1077,30 @@ class ContactsWidget(QWidget):
         )
         if reply == QMessageBox.Yes:
             for msg_id in selected_ids:
-                delete_message(msg_id)
                 bubble = self.find_message_bubble(msg_id)
-                if bubble:
-                    area.messages_layout.removeWidget(bubble)
-                    bubble.deleteLater()
-            # Используем clear_selection() вместо простого clear(), чтобы снять выделение визуально
+                if not bubble:
+                    continue
+                if not bubble.is_own:
+                    continue
+                delete_message(msg_id)
+                area.messages_layout.removeWidget(bubble)
+                bubble.deleteLater()
+            # Очищаем выделение полностью
             area.clear_selection()
             self.hide_action_buttons()
+            
+            # Обновляем last_message_id
+            messages = get_chat_messages(self.current_chat_id)
+            if messages:
+                self.last_message_id = messages[-1]["id"]
+            else:
+                self.last_message_id = 0
+            
+            # Обновляем непрочитанные
+            self.update_unread_badges()
+            
+            # Обновляем список контактов
+            self.load_contacts(self.current_search_text)
 
     def forward_selected_messages(self):
         """Переслать выделенные сообщения в другой чат."""
