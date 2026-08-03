@@ -318,25 +318,60 @@ class MessageBubble(QFrame):
         self.status_icon.style().polish(self.status_icon)
 
     def show_context_menu(self, position):
-        # Показываем контекстное меню только если клик был непосредственно на облаке сообщения
-        if not self.is_own:
-            return
+        # Получаем доступ к родительскому виджету для управления кнопками
+        parent_widget = self.parent()
+        while parent_widget and not isinstance(parent_widget, ContactsWidget):
+            parent_widget = parent_widget.parent()
+        
         # Проверяем, что клик был именно на bubble (облаке сообщения)
         pos_in_bubble = self.bubble.mapFromGlobal(self.mapToGlobal(position))
         if not self.bubble.rect().contains(pos_in_bubble):
             return
+        
         menu = QMenu(self)
-        edit_action = QAction("Редактировать", self)
-        delete_action = QAction("Удалить", self)
-        edit_action.triggered.connect(
-            lambda: self.editRequested.emit(self.message_id, self.msg_data["text"])
-        )
-        delete_action.triggered.connect(
-            lambda: self.deleteRequested.emit(self.message_id)
-        )
-        menu.addAction(edit_action)
+        
+        # Добавляем действие для удаления выделенных
+        delete_action = QAction("🗑 Удалить выделенные", self)
+        delete_action.triggered.connect(lambda: self._delete_selected_from_menu(parent_widget))
         menu.addAction(delete_action)
+        
+        # Добавляем действие для пересылки выделенных
+        forward_action = QAction("✉ Переслать выделенные", self)
+        forward_action.triggered.connect(lambda: self._forward_selected_from_menu(parent_widget))
+        menu.addAction(forward_action)
+        
+        menu.addSeparator()
+        
+        # Если сообщение не выделено, добавляем опцию выделения
+        if not self.is_selected:
+            select_action = QAction("Выделить сообщение", self)
+            select_action.triggered.connect(lambda: self.toggle_selection())
+            menu.addAction(select_action)
+        else:
+            # Добавляем действие для редактирования (только для своих сообщений)
+            if self.is_own:
+                edit_action = QAction("Редактировать", self)
+                edit_action.triggered.connect(
+                    lambda: self.editRequested.emit(self.message_id, self.msg_data["text"])
+                )
+                menu.addAction(edit_action)
+            
+            # Добавляем действие для снятия выделения
+            deselect_action = QAction("Снять выделение", self)
+            deselect_action.triggered.connect(lambda: self.toggle_selection())
+            menu.addAction(deselect_action)
+        
         menu.exec(self.mapToGlobal(position))
+    
+    def _delete_selected_from_menu(self, parent_widget):
+        """Вызвать удаление выделенных сообщений через родительский виджет."""
+        if parent_widget and hasattr(parent_widget, 'delete_selected_messages'):
+            parent_widget.delete_selected_messages()
+    
+    def _forward_selected_from_menu(self, parent_widget):
+        """Вызвать пересылку выделенных сообщений через родительский виджет."""
+        if parent_widget and hasattr(parent_widget, 'forward_selected_messages'):
+            parent_widget.forward_selected_messages()
 
     def mousePressEvent(self, event):
         # Обработка правой кнопки мыши для вызова контекстного меню или выделения
@@ -344,9 +379,8 @@ class MessageBubble(QFrame):
             # Проверяем, был ли клик непосредственно на облаке сообщения
             pos_in_bubble = self.bubble.mapFromGlobal(event.globalPosition().toPoint())
             if self.bubble.rect().contains(pos_in_bubble):
-                # Клик на облаке - показываем контекстное меню (только для своих сообщений)
-                if self.is_own:
-                    self.show_context_menu(event.pos())
+                # Клик на облаке - показываем контекстное меню с опциями для выделенных
+                self.show_context_menu(event.pos())
             else:
                 # Клик левее облака - переключаем выделение сообщения
                 self.toggle_selection()
@@ -525,7 +559,21 @@ class ContactsWidget(QWidget):
         header_layout = QHBoxLayout(self.chat_header_panel)
         header_layout.setContentsMargins(10, 8, 10, 8)
         
-        # Кнопки действий для выделенных сообщений (слева от заголовка)
+        # Заголовок чата (ФИО или наименование)
+        self.chat_header = QLabel("Выберите чат")
+        self.chat_header.setObjectName("chatHeader")
+        header_layout.addWidget(self.chat_header)
+        
+        # Разделитель между заголовком и кнопками
+        header_layout.addSpacing(15)
+        
+        # Метка количества выделенных сообщений
+        self.selected_count_label = QLabel("")
+        self.selected_count_label.setObjectName("selectedCountLabel")
+        self.selected_count_label.setVisible(False)
+        header_layout.addWidget(self.selected_count_label)
+        
+        # Кнопки действий для выделенных сообщений (справа от заголовка)
         self.delete_selected_btn = QPushButton("🗑 Удалить выделенные")
         self.delete_selected_btn.setObjectName("deleteSelectedBtn")
         self.delete_selected_btn.setVisible(False)
@@ -537,19 +585,6 @@ class ContactsWidget(QWidget):
         self.forward_selected_btn.setVisible(False)
         self.forward_selected_btn.clicked.connect(self.forward_selected_messages)
         header_layout.addWidget(self.forward_selected_btn)
-        
-        # Метка количества выделенных сообщений
-        self.selected_count_label = QLabel("")
-        self.selected_count_label.setObjectName("selectedCountLabel")
-        self.selected_count_label.setVisible(False)
-        header_layout.addWidget(self.selected_count_label)
-        
-        # Разделитель между кнопками и заголовком
-        header_layout.addSpacing(15)
-        
-        self.chat_header = QLabel("Выберите чат")
-        self.chat_header.setObjectName("chatHeader")
-        header_layout.addWidget(self.chat_header)
         
         header_layout.addStretch()
         
