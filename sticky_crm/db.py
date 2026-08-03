@@ -954,3 +954,254 @@ def forward_messages(target_chat_id, sender_id, messages_to_forward):
     finally:
         cursor.close()
         conn.close()
+
+# ==================== ФУНКЦИИ ДЛЯ ЗАДАЧ ====================
+
+def get_all_employees_for_selector():
+    """Получить всех активных сотрудников для селекторов."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, last_name, first_name, middle_name, email
+            FROM employees
+            WHERE is_dismissed = FALSE
+            ORDER BY last_name, first_name
+        """)
+        results = []
+        for row in cursor.fetchall():
+            full_name = f"{row[1]} {row[2]} {row[3] or ''}".strip()
+            results.append({'id': row[0], 'name': full_name, 'email': row[4]})
+        return results
+    except Exception as e:
+        print(f"Ошибка получения сотрудников: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_all_tags():
+    """Получить все существующие теги."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, color FROM task_tags ORDER BY name")
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Ошибка получения тегов: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def create_tag(name, color="#808080"):
+    """Создать новый тег."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO task_tags (name, color) VALUES (%s, %s) ON CONFLICT (name) DO UPDATE SET color = %s RETURNING id",
+            (name, color, color)
+        )
+        tag_id = cursor.fetchone()[0]
+        conn.commit()
+        return tag_id
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка создания тега: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id):
+    """Создать новую задачу."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        # Создаем задачу
+        cursor.execute("""
+            INSERT INTO tasks (title, description, author_id, executor_id, deadline, priority, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (title, description, author_id, executor_id, deadline, priority, creator_id))
+        task_id = cursor.fetchone()[0]
+        
+        # Добавляем наблюдателей
+        for obs_id in observers_ids:
+            cursor.execute(
+                "INSERT INTO task_observers (task_id, employee_id) VALUES (%s, %s)",
+                (task_id, obs_id)
+            )
+        
+        # Добавляем теги
+        for tag_id in tag_ids:
+            cursor.execute(
+                "INSERT INTO task_tags_link (task_id, tag_id) VALUES (%s, %s)",
+                (task_id, tag_id)
+            )
+        
+        conn.commit()
+        return task_id
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка создания задачи: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_tasks(filter_params=None):
+    """Получить список задач с фильтрацией."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        query = """
+            SELECT 
+                t.id,
+                t.title,
+                t.description,
+                t.status,
+                t.priority,
+                t.deadline,
+                t.created_at,
+                a.last_name || ' ' || a.first_name as author_name,
+                e.last_name || ' ' || e.first_name as executor_name,
+                c.full_name as creator_name
+            FROM tasks t
+            JOIN employees a ON t.author_id = a.id
+            JOIN employees e ON t.executor_id = e.id
+            JOIN employees c ON t.created_by = c.id
+        """
+        params = []
+        
+        if filter_params:
+            conditions = []
+            if filter_params.get('status'):
+                conditions.append("t.status = %s")
+                params.append(filter_params['status'])
+            if filter_params.get('priority'):
+                conditions.append("t.priority = %s")
+                params.append(filter_params['priority'])
+            if filter_params.get('executor_id'):
+                conditions.append("t.executor_id = %s")
+                params.append(filter_params['executor_id'])
+            if filter_params.get('author_id'):
+                conditions.append("t.author_id = %s")
+                params.append(filter_params['author_id'])
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+        
+        query += " ORDER BY t.created_at DESC"
+        
+        cursor.execute(query, params)
+        tasks = []
+        for row in cursor.fetchall():
+            tasks.append({
+                'id': row[0],
+                'title': row[1],
+                'description': row[2],
+                'status': row[3],
+                'priority': row[4],
+                'deadline': row[5],
+                'created_at': row[6],
+                'author_name': row[7],
+                'executor_name': row[8],
+                'creator_name': row[9]
+            })
+        return tasks
+    except Exception as e:
+        print(f"Ошибка получения задач: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_task_detail(task_id):
+    """Получить детальную информацию о задаче."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        
+        # Основная информация
+        cursor.execute("""
+            SELECT 
+                t.id,
+                t.title,
+                t.description,
+                t.status,
+                t.priority,
+                t.deadline,
+                t.created_at,
+                a.last_name || ' ' || a.first_name as author_name,
+                e.last_name || ' ' || e.first_name as executor_name,
+                c.full_name as creator_name
+            FROM tasks t
+            JOIN employees a ON t.author_id = a.id
+            JOIN employees e ON t.executor_id = e.id
+            JOIN employees c ON t.created_by = c.id
+            WHERE t.id = %s
+        """, (task_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            return None
+        
+        task = {
+            'id': row[0],
+            'title': row[1],
+            'description': row[2],
+            'status': row[3],
+            'priority': row[4],
+            'deadline': row[5],
+            'created_at': row[6],
+            'author_name': row[7],
+            'executor_name': row[8],
+            'creator_name': row[9],
+            'observers': [],
+            'tags': []
+        }
+        
+        # Наблюдатели
+        cursor.execute("""
+            SELECT emp.last_name || ' ' || emp.first_name
+            FROM task_observers tobs
+            JOIN employees emp ON tobs.employee_id = emp.id
+            WHERE tobs.task_id = %s
+        """, (task_id,))
+        task['observers'] = [r[0] for r in cursor.fetchall()]
+        
+        # Теги
+        cursor.execute("""
+            SELECT tt.name, tt.color
+            FROM task_tags_link ttl
+            JOIN task_tags tt ON ttl.tag_id = tt.id
+            WHERE ttl.task_id = %s
+        """, (task_id,))
+        task['tags'] = [{'name': r[0], 'color': r[1]} for r in cursor.fetchall()]
+        
+        return task
+    except Exception as e:
+        print(f"Ошибка получения детали задачи: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
