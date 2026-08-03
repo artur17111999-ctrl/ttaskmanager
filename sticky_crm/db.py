@@ -1063,8 +1063,11 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
         conn.close()
 
 
-def get_tasks(filter_params=None):
-    """Получить список задач с фильтрацией."""
+def get_tasks(filter_params=None, current_user_id=None):
+    """Получить список задач с фильтрацией.
+    Если передан current_user_id, возвращаются задачи, где пользователь
+    является автором, исполнителем или наблюдателем.
+    """
     conn = get_connection()
     if not conn:
         return []
@@ -1089,6 +1092,19 @@ def get_tasks(filter_params=None):
         """
         params = []
         
+        # Если передан current_user_id, фильтруем по роли пользователя
+        if current_user_id is not None:
+            query += """
+            WHERE t.author_id = %s 
+               OR t.executor_id = %s 
+               OR EXISTS (
+                   SELECT 1 FROM task_observers tobs 
+                   WHERE tobs.task_id = t.id AND tobs.employee_id = %s
+               )
+            """
+            params.extend([current_user_id, current_user_id, current_user_id])
+        
+        # Дополнительные фильтры
         if filter_params:
             conditions = []
             if filter_params.get('status'):
@@ -1105,7 +1121,11 @@ def get_tasks(filter_params=None):
                 params.append(filter_params['author_id'])
             
             if conditions:
-                query += " WHERE " + " AND ".join(conditions)
+                # Если уже есть WHERE для current_user_id, используем AND
+                if current_user_id is not None:
+                    query += " AND " + " AND ".join(conditions)
+                else:
+                    query += " WHERE " + " AND ".join(conditions)
         
         query += " ORDER BY t.created_at DESC"
         
