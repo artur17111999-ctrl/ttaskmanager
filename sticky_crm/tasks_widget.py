@@ -1003,6 +1003,29 @@ class TaskDetailView(QWidget):
         tags_layout.addWidget(self.tags_list)
         content_layout.addWidget(self.tags_group)
         
+        # Поле нового комментария (сразу после описания и информации)
+        comment_input_group = QGroupBox("Добавить комментарий")
+        comment_input_group.setObjectName("commentInputGroup")
+        comment_input_layout = QVBoxLayout(comment_input_group)
+        comment_input_layout.setContentsMargins(10, 10, 10, 10)
+        
+        comment_bottom = QHBoxLayout()
+        
+        self.comment_edit = QTextEdit()
+        self.comment_edit.setObjectName("commentEdit")
+        self.comment_edit.setPlaceholderText("Написать комментарий...")
+        self.comment_edit.setMinimumHeight(70)
+        
+        comment_bottom.addWidget(self.comment_edit, stretch=1)
+        
+        send_comment_btn = QPushButton("Отправить")
+        send_comment_btn.setObjectName("sendCommentButton")
+        send_comment_btn.clicked.connect(self.send_comment)
+        comment_bottom.addWidget(send_comment_btn)
+        
+        comment_input_layout.addLayout(comment_bottom)
+        content_layout.addWidget(comment_input_group)
+        
         # ============================
         # Комментарии как в Yandex Tracker
         # ============================
@@ -1056,76 +1079,10 @@ class TaskDetailView(QWidget):
         )
 
 
-        # Поле нового комментария
-
-        comment_bottom = QHBoxLayout()
-
-
-        self.comment_edit = QTextEdit()
-        self.comment_edit.setObjectName(
-            "commentEdit"
-        )
-
-        self.comment_edit.setPlaceholderText(
-            "Написать комментарий..."
-        )
-
-
-        self.comment_edit.setMinimumHeight(70)
-
-
-        comment_bottom.addWidget(
-            self.comment_edit,
-            stretch=1
-        )
-
-
-        send_comment_btn = QPushButton(
-            "Отправить"
-        )
-
-        send_comment_btn.setObjectName(
-            "sendCommentButton"
-        )
-
-
-        send_comment_btn.clicked.connect(
-            self.send_comment
-        )
-
-
-        comment_bottom.addWidget(
-            send_comment_btn
-        )
-
-
-        comments_layout.addLayout(
-            comment_bottom
-        )
-
-
         content_layout.addWidget(
             comments_group,
             stretch=1
         )
-        
-        # Файлы (заглушка)
-        files_group = QGroupBox("Файлы")
-        files_layout = QVBoxLayout(files_group)
-        files_placeholder = QLabel("Файлы пока не реализованы")
-        files_placeholder.setAlignment(Qt.AlignCenter)
-        files_placeholder.setStyleSheet("color: gray;")
-        files_layout.addWidget(files_placeholder)
-        content_layout.addWidget(files_group)
-        
-        # История изменений (заглушка)
-        history_group = QGroupBox("История изменений")
-        history_layout = QVBoxLayout(history_group)
-        history_placeholder = QLabel("История изменений пока не реализована")
-        history_placeholder.setAlignment(Qt.AlignCenter)
-        history_placeholder.setStyleSheet("color: gray;")
-        history_layout.addWidget(history_placeholder)
-        content_layout.addWidget(history_group)
         
         content_layout.addStretch()
         
@@ -1227,7 +1184,7 @@ class TaskDetailView(QWidget):
         self.delete_btn.setVisible(is_author)
     
     def load_comments(self):
-        """Загрузить и отобразить комментарии."""
+        """Загрузить и отобразить комментарии (новые выше старых)."""
         # Очищаем контейнер комментариев
         while self.comments_container_layout.count():
             item = self.comments_container_layout.takeAt(0)
@@ -1236,7 +1193,8 @@ class TaskDetailView(QWidget):
         
         comments = self.task_data.get('comments', [])
         if comments:
-            for comment in comments:
+            # Разворачиваем список, чтобы новые комментарии были сверху
+            for comment in reversed(comments):
                 comment_widget = self.create_comment_widget(comment)
                 self.comments_container_layout.addWidget(comment_widget)
         else:
@@ -1247,14 +1205,13 @@ class TaskDetailView(QWidget):
         
         self.comments_container_layout.addStretch(1)
         
-        # Автоматическая прокрутка к последнему комментарию
+        # Автоматическая прокрутка к первому комментарию (который теперь вверху - самый новый)
         QTimer.singleShot(
             100,
             lambda:
                 self.comments_scroll.verticalScrollBar()
                 .setValue(
-                    self.comments_scroll.verticalScrollBar()
-                    .maximum()
+                    0
                 )
         )
     
