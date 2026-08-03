@@ -43,15 +43,15 @@ class TaskCreatorWidget(QWidget):
         
         back_btn = QPushButton("← Назад")
         back_btn.setObjectName("backButton")
-        back_btn.setMinimumHeight(40)
-        back_btn.setMinimumWidth(120)
+        back_btn.setMinimumHeight(35)
+        back_btn.setMinimumWidth(100)
         back_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e0e0e0;
                 border: 1px solid #ccc;
                 border-radius: 4px;
-                font-size: 14px;
-                padding: 8px 15px;
+                font-size: 13px;
+                padding: 6px 12px;
                 color: #333333;
             }
             QPushButton:hover {
@@ -65,14 +65,14 @@ class TaskCreatorWidget(QWidget):
         
         header_label = QLabel("Создание новой задачи")
         header_label.setObjectName("taskHeaderLabel")
-        header_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
+        header_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 5px;")
         header_layout.addWidget(header_label)
         
         header_layout.addStretch()
         
         # Пустой спейсер для баланса
         empty_spacer = QLabel("")
-        empty_spacer.setMinimumWidth(120)
+        empty_spacer.setMinimumWidth(100)
         header_layout.addWidget(empty_spacer)
         
         main_layout.addLayout(header_layout)
@@ -158,7 +158,8 @@ class TaskCreatorWidget(QWidget):
         self.author_label = QLabel(self.current_user_name)
         self.author_label.setStyleSheet("""
             QLabel {
-                background-color: #e3f2fd;
+                background-color: #1976d2;
+                color: white;
                 padding: 10px;
                 border-radius: 4px;
                 font-weight: bold;
@@ -281,24 +282,6 @@ class TaskCreatorWidget(QWidget):
         
         # Кнопки действий
         buttons_layout = QHBoxLayout()
-        
-        back_btn_bottom = QPushButton("← Назад")
-        back_btn_bottom.clicked.connect(self.go_back)
-        back_btn_bottom.setMinimumHeight(45)
-        back_btn_bottom.setMinimumWidth(120)
-        back_btn_bottom.setStyleSheet("""
-            QPushButton {
-                background-color: #e0e0e0;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 14px;
-                color: #333333;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-        """)
-        buttons_layout.addWidget(back_btn_bottom)
         
         buttons_layout.addStretch()
         
