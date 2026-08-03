@@ -4,9 +4,9 @@
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel,
-    QLineEdit, QPushButton
+    QLineEdit, QPushButton, QCheckBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from register_window import RegisterWindow
 
 
@@ -17,11 +17,13 @@ class AuthWindow(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Вход в систему")
-        self.setFixedSize(400, 370)
+        self.setFixedSize(400, 400)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
 
         self.user_data = None
+        self.settings = QSettings("StickyCRM", "AuthSettings")
         self.init_ui()
+        self.load_saved_credentials()
 
     def init_ui(self):
         """Построение интерфейса."""
@@ -58,6 +60,10 @@ class AuthWindow(QDialog):
         self.login_button.setMinimumHeight(40)
         self.login_button.clicked.connect(self.handle_login)
 
+        # Чекбокс "Запомнить меня"
+        self.remember_checkbox = QCheckBox("Запомнить меня")
+        self.remember_checkbox.setChecked(False)
+
         # Кнопка регистрации
         self.register_button = QPushButton("Регистрация")
         self.register_button.setMinimumHeight(35)
@@ -70,6 +76,7 @@ class AuthWindow(QDialog):
         layout.addWidget(self.login_input)
         layout.addWidget(password_label)
         layout.addWidget(self.password_input)
+        layout.addWidget(self.remember_checkbox)
         layout.addWidget(self.error_label)
         layout.addSpacing(5)
         layout.addWidget(self.login_button)
@@ -97,9 +104,31 @@ class AuthWindow(QDialog):
 
         if success:
             self.user_data = result
+            # Сохраняем или удаляем данные в зависимости от чекбокса
+            self.save_credentials(login, password)
             self.accept()
         else:
             self.show_error(result)
+
+    def save_credentials(self, login, password):
+        """Сохранение учётных данных."""
+        if self.remember_checkbox.isChecked():
+            self.settings.setValue("login", login)
+            self.settings.setValue("password", password)
+            self.settings.setValue("remember", True)
+        else:
+            self.settings.remove("login")
+            self.settings.remove("password")
+            self.settings.setValue("remember", False)
+
+    def load_saved_credentials(self):
+        """Загрузка сохранённых учётных данных."""
+        if self.settings.value("remember", False, type=bool):
+            login = self.settings.value("login", "")
+            password = self.settings.value("password", "")
+            self.login_input.setText(login)
+            self.password_input.setText(password)
+            self.remember_checkbox.setChecked(True)
 
     def show_error(self, message):
         """Показать ошибку."""
