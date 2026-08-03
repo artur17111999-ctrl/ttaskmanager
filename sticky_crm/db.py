@@ -1422,7 +1422,8 @@ def get_task_detail(task_id):
                 ts.color as status_color,
                 tp.code as priority_code,
                 tp.title as priority_title,
-                tp.color as priority_color
+                tp.color as priority_color,
+                t.author_id
             FROM tasks t
             JOIN employees a ON t.author_id = a.id
             JOIN employees e ON t.executor_id = e.id
@@ -1452,6 +1453,7 @@ def get_task_detail(task_id):
             'author_name': row[7],
             'executor_name': row[8],
             'creator_name': row[9],
+            'author_id': row[16],
             'observers': [],
             'tags': []
         }

@@ -230,17 +230,6 @@ class TaskDetailView(QWidget):
             if self.task_data.get('created_at') else 'N/A'
         )
         
-        self.observers_list.clear()
-        observers = self.task_data.get('observers', [])
-        if observers:
-            for obs in observers:
-                item = QListWidgetItem(obs)
-                self.observers_list.addItem(item)
-        else:
-            item = QListWidgetItem("Нет наблюдателей")
-            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
-            self.observers_list.addItem(item)
-        
         self.load_tags()
         self.load_comments()
         
@@ -250,3 +239,205 @@ class TaskDetailView(QWidget):
     def go_back(self):
         """Return to the task list."""
         self.backRequested.emit()
+
+    def load_employees(self):
+        from db import get_all_employees_for_selector
+        try:
+            employees = get_all_employees_for_selector()
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить сотрудников:\n{error}")
+            return
+
+        self.executor_combo.clear()
+        self.observers_list.clear()
+        executor_name = self.task_data.get('executor_name', '')
+        observer_names = set(self.task_data.get('observers', []))
+        for index, employee in enumerate(employees):
+            self.executor_combo.addItem(employee['name'], employee['id'])
+            if employee['name'] == executor_name:
+                self.executor_combo.setCurrentIndex(index)
+            item = QListWidgetItem(employee['name'])
+            item.setData(EMPLOYEE_ID_ROLE, employee['id'])
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if employee['name'] in observer_names else Qt.Unchecked)
+            self.observers_list.addItem(item)
+
+    def load_statuses(self):
+        from db import get_all_statuses
+        try:
+            statuses = get_all_statuses()
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить статусы:\n{error}")
+            return
+
+        self.status_combo.clear()
+        for index, status in enumerate(statuses):
+            self.status_combo.addItem(status[2], status[0])
+            if status[1] == self.task_data.get('status_code') or status[2] == self.task_data.get('status'):
+                self.status_combo.setCurrentIndex(index)
+
+    def load_priorities(self):
+        from db import get_all_priorities
+        try:
+            priorities = get_all_priorities()
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить приоритеты:\n{error}")
+            return
+
+        self.priority_combo.clear()
+        for index, priority in enumerate(priorities):
+            self.priority_combo.addItem(priority[2], priority[0])
+            if priority[1] == self.task_data.get('priority_code') or priority[2] == self.task_data.get('priority'):
+                self.priority_combo.setCurrentIndex(index)
+
+    def load_tags(self):
+        from db import get_all_tags
+        try:
+            tags = get_all_tags()
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить теги:\n{error}")
+            return
+
+        selected_names = {tag['name'] for tag in self.task_data.get('tags', [])}
+        self.tags_list.clear()
+        for tag_id, name, color in tags:
+            item = QListWidgetItem(name)
+            item.setData(TAG_ID_ROLE, tag_id)
+            item.setData(TAG_COLOR_ROLE, color)
+            if color:
+                item.setForeground(QColor(color))
+            self.tags_list.addItem(item)
+            item.setSelected(name in selected_names)
+
+    def create_new_tag(self):
+        from db import create_tag
+        name = self.new_tag_edit.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Ошибка", "Введите название тега")
+            return
+        try:
+            tag_id = create_tag(name)
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось создать тег:\n{error}")
+            return
+        if not tag_id:
+            QMessageBox.warning(self, "Ошибка", "Не удалось создать тег")
+            return
+
+        item = QListWidgetItem(name)
+        item.setData(TAG_ID_ROLE, tag_id)
+        item.setData(TAG_COLOR_ROLE, "#808080")
+        item.setForeground(QColor("#808080"))
+        self.tags_list.addItem(item)
+        item.setSelected(True)
+        self.new_tag_edit.clear()
+
+    def load_comments(self):
+        from db import get_task_comments
+        while self.comments_container_layout.count():
+            layout_item = self.comments_container_layout.takeAt(0)
+            widget = layout_item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        try:
+            comments = get_task_comments(self.task_id)
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить комментарии:\n{error}")
+            return
+
+        if not comments:
+            empty_label = QLabel("Комментариев пока нет")
+            empty_label.setAlignment(Qt.AlignCenter)
+            self.comments_container_layout.addWidget(empty_label)
+            return
+        for comment in comments:
+            card = QFrame()
+            card.setObjectName("commentCard")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(10, 8, 10, 8)
+            author_label = QLabel(f"{comment['author_name']} · {comment['created_at']}")
+            author_label.setObjectName("commentAuthorLabel")
+            text_label = QLabel(comment['text'])
+            text_label.setWordWrap(True)
+            text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            card_layout.addWidget(author_label)
+            card_layout.addWidget(text_label)
+            self.comments_container_layout.addWidget(card)
+
+    def send_comment(self):
+        from db import add_task_comment
+        text = self.comment_edit.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "Ошибка", "Введите текст комментария")
+            return
+        try:
+            success = add_task_comment(self.task_id, self.current_user_id, text)
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось добавить комментарий:\n{error}")
+            return
+        if not success:
+            QMessageBox.critical(self, "Ошибка", "Не удалось добавить комментарий")
+            return
+        self.comment_edit.clear()
+        self.load_comments()
+
+    def save_task(self):
+        from db import update_task
+        title = self.title_edit.text().strip()
+        description = self.desc_text.toPlainText().strip()
+        executor_id = self.executor_combo.currentData()
+        if not title:
+            QMessageBox.warning(self, "Ошибка", "Введите название задачи")
+            return
+        if len(description) < 10:
+            QMessageBox.warning(self, "Ошибка", "Описание должно содержать не менее 10 символов")
+            return
+        if executor_id is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите исполнителя")
+            return
+
+        observer_ids = [
+            self.observers_list.item(index).data(EMPLOYEE_ID_ROLE)
+            for index in range(self.observers_list.count())
+            if self.observers_list.item(index).checkState() == Qt.Checked
+        ]
+        tag_ids = [item.data(TAG_ID_ROLE) for item in self.tags_list.selectedItems()]
+        try:
+            success = update_task(
+                task_id=self.task_id, title=title, description=description,
+                executor_id=executor_id, status=None, priority=None,
+                deadline=self.deadline_edit.date().toString("yyyy-MM-dd"),
+                observers_ids=observer_ids, tag_ids=tag_ids,
+                status_id=self.status_combo.currentData(),
+                priority_id=self.priority_combo.currentData(),
+            )
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось обновить задачу:\n{error}")
+            return
+        if not success:
+            QMessageBox.critical(self, "Ошибка", "Не удалось обновить задачу")
+            return
+        QMessageBox.information(self, "Успех", "Задача успешно обновлена")
+        self.taskUpdated.emit()
+
+    def confirm_delete(self):
+        from db import delete_task
+        if self.task_data.get('author_id') != self.current_user_id:
+            QMessageBox.warning(self, "Ошибка", "Удалить задачу может только её автор")
+            return
+        answer = QMessageBox.question(
+            self, "Удаление задачи", "Удалить задачу без возможности восстановления?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            success, message = delete_task(self.task_id, self.current_user_id)
+        except Exception as error:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось удалить задачу:\n{error}")
+            return
+        if not success:
+            QMessageBox.critical(self, "Ошибка", message)
+            return
+        QMessageBox.information(self, "Успех", message)
+        self.taskUpdated.emit()
