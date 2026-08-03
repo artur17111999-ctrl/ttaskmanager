@@ -479,10 +479,14 @@ class TaskDetailWidget(QDialog):
         priority_label = QLabel(self.task_data.get('priority', 'N/A'))
         info_layout.addRow("Приоритет:", priority_label)
         
-        deadline_label = QLabel(self.task_data.get('deadline', 'N/A') or 'Не установлен')
+        deadline_val = self.task_data.get('deadline')
+        deadline_str = str(deadline_val) if deadline_val else 'Не установлен'
+        deadline_label = QLabel(deadline_str)
         info_layout.addRow("Дедлайн:", deadline_label)
         
-        created_at_label = QLabel(str(self.task_data.get('created_at', 'N/A'))[:19])
+        created_at_val = self.task_data.get('created_at')
+        created_at_str = str(created_at_val)[:19] if created_at_val else 'N/A'
+        created_at_label = QLabel(created_at_str)
         info_layout.addRow("Создана:", created_at_label)
         
         content_layout.addWidget(info_group)
