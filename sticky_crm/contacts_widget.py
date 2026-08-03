@@ -232,6 +232,10 @@ class MessageBubble(QFrame):
         self.bubble.setProperty("isOwn", "true" if self.is_own else "false")
         self.bubble.style().unpolish(self.bubble)
         self.bubble.style().polish(self.bubble)
+        
+        # Включаем контекстное меню для bubble
+        self.bubble.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.bubble.customContextMenuRequested.connect(self.show_context_menu)
 
         bubble_layout = QVBoxLayout(self.bubble)
         bubble_layout.setContentsMargins(10, 7, 10, 7)
@@ -249,6 +253,10 @@ class MessageBubble(QFrame):
         self.text_label.setWordWrap(True)
         self.text_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.text_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        
+        # Включаем контекстное меню для text_label
+        self.text_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.text_label.customContextMenuRequested.connect(self.show_context_menu)
 
         self.update_text_display()
         bubble_layout.addWidget(self.text_label)
@@ -321,18 +329,20 @@ class MessageBubble(QFrame):
         menu = QMenu(self)
 
         if self.is_own and not self.msg_data.get("is_deleted"):
-            menu.addAction(
-                "✏️ Редактировать",
+            edit_action = QAction("✏️ Редактировать", self)
+            edit_action.triggered.connect(
                 lambda: self.editRequested.emit(
                     self.message_id,
                     self.msg_data["text"]
                 )
             )
+            menu.addAction(edit_action)
 
-            menu.addAction(
-                "🗑 Удалить сообщение",
+            delete_action = QAction("🗑 Удалить сообщение", self)
+            delete_action.triggered.connect(
                 lambda: self.deleteRequested.emit(self.message_id)
             )
+            menu.addAction(delete_action)
 
         menu.addSeparator()
 
