@@ -1347,10 +1347,89 @@ def get_task_detail(task_id):
         """, (task_id,))
         task['tags'] = [{'name': r[0], 'color': r[1]} for r in cursor.fetchall()]
         
+        # Комментарии
+        cursor.execute("""
+            SELECT 
+                tc.id,
+                tc.comment_text,
+                tc.created_at,
+                e.last_name || ' ' || e.first_name as author_name
+            FROM task_comments tc
+            JOIN employees e ON tc.author_id = e.id
+            WHERE tc.task_id = %s
+            ORDER BY tc.created_at ASC
+        """, (task_id,))
+        task['comments'] = []
+        for row in cursor.fetchall():
+            task['comments'].append({
+                'id': row[0],
+                'text': row[1],
+                'created_at': row[2].strftime("%d.%m.%Y %H:%M") if row[2] else "",
+                'author_name': row[3]
+            })
+        
         return task
     except Exception as e:
         print(f"Ошибка получения детали задачи: {e}")
         return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_task_comments(task_id):
+    """Получить список комментариев к задаче."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                tc.id,
+                tc.comment_text,
+                tc.created_at,
+                e.last_name || ' ' || e.first_name as author_name
+            FROM task_comments tc
+            JOIN employees e ON tc.author_id = e.id
+            WHERE tc.task_id = %s
+            ORDER BY tc.created_at ASC
+        """, (task_id,))
+        
+        comments = []
+        for row in cursor.fetchall():
+            comments.append({
+                'id': row[0],
+                'text': row[1],
+                'created_at': row[2].strftime("%d.%m.%Y %H:%M") if row[2] else "",
+                'author_name': row[3]
+            })
+        return comments
+    except Exception as e:
+        print(f"Ошибка получения комментариев: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def add_task_comment(task_id, author_id, comment_text):
+    """Добавить комментарий к задаче."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO task_comments (task_id, author_id, comment_text)
+            VALUES (%s, %s, %s)
+        """, (task_id, author_id, comment_text))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка добавления комментария: {e}")
+        return False
     finally:
         cursor.close()
         conn.close()
