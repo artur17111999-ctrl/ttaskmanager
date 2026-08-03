@@ -339,25 +339,20 @@ class MessageBubble(QFrame):
         menu.exec(self.mapToGlobal(position))
 
     def mousePressEvent(self, event):
-        # Обработка правой кнопки мыши для вызова контекстного меню
+        # Обработка правой кнопки мыши для вызова контекстного меню или выделения
         if event.button() == Qt.RightButton:
             # Проверяем, был ли клик непосредственно на облаке сообщения
             pos_in_bubble = self.bubble.mapFromGlobal(event.globalPosition().toPoint())
             if self.bubble.rect().contains(pos_in_bubble):
-                # Клик на облаке - показываем контекстное меню
-                self.show_context_menu(event.pos())
+                # Клик на облаке - показываем контекстное меню (только для своих сообщений)
+                if self.is_own:
+                    self.show_context_menu(event.pos())
             else:
-                # Клик левее облака - переключаем режим выделения
+                # Клик левее облака - переключаем выделение сообщения
                 self.toggle_selection()
         elif event.button() == Qt.LeftButton:
-            # Левая кнопка - выделяем сообщение (в режиме выделения)
-            parent_widget = self.parent()
-            while parent_widget:
-                if isinstance(parent_widget, ChatMessagesArea):
-                    if hasattr(parent_widget, 'selection_mode') and parent_widget.selection_mode:
-                        self.toggle_selection()
-                    break
-                parent_widget = parent_widget.parent()
+            # Левая кнопка - выделяем сообщение (всегда работает для выделения)
+            self.toggle_selection()
         super().mousePressEvent(event)
 
     def toggle_selection(self):
