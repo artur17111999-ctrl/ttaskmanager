@@ -5,31 +5,31 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Databases
-*.sqlite
-*.db
+# Dependencies
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.*
 
 # Logs
 *.log
 
-# Environment
-.env
-.env.local
-*.env.*
+# Coverage
+.coverage
+coverage/
+htmlcov/
 
-# Dependencies
-venv/
-.venv/
-.env/
-
-# Editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
-# Build artifacts
+# Build
 dist/
 build/
-target/
+*.egg-info/
 ```

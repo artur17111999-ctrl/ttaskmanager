@@ -21,6 +21,7 @@ class TaskCreatorWidget(QWidget):
     """Виджет создания новой задачи."""
     
     taskCreated = Signal()  # Сигнал о создании задачи
+    backRequested = Signal()  # Сигнал возврата назад
     
     def __init__(self, current_user_id, current_user_name):
         super().__init__()
@@ -37,11 +38,43 @@ class TaskCreatorWidget(QWidget):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(15)
         
-        # Заголовок
+        # Заголовок и кнопка назад
+        header_layout = QHBoxLayout()
+        
+        back_btn = QPushButton("← Назад")
+        back_btn.setObjectName("backButton")
+        back_btn.setMinimumHeight(40)
+        back_btn.setMinimumWidth(120)
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 14px;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+        """)
+        header_layout.addWidget(back_btn)
+        back_btn.clicked.connect(self.go_back)
+        
+        header_layout.addStretch()
+        
         header_label = QLabel("Создание новой задачи")
         header_label.setObjectName("taskHeaderLabel")
         header_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
-        main_layout.addWidget(header_label)
+        header_layout.addWidget(header_label)
+        
+        header_layout.addStretch()
+        
+        # Пустой спейсер для баланса
+        empty_spacer = QLabel("")
+        empty_spacer.setMinimumWidth(120)
+        header_layout.addWidget(empty_spacer)
+        
+        main_layout.addLayout(header_layout)
         
         # Основной контейнер с разделителем
         splitter = QSplitter(Qt.Horizontal)
@@ -246,6 +279,24 @@ class TaskCreatorWidget(QWidget):
         
         # Кнопки действий
         buttons_layout = QHBoxLayout()
+        
+        back_btn_bottom = QPushButton("← Назад")
+        back_btn_bottom.clicked.connect(self.go_back)
+        back_btn_bottom.setMinimumHeight(45)
+        back_btn_bottom.setMinimumWidth(120)
+        back_btn_bottom.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+        """)
+        buttons_layout.addWidget(back_btn_bottom)
+        
         buttons_layout.addStretch()
         
         cancel_btn = QPushButton("Отмена")
@@ -399,6 +450,10 @@ class TaskCreatorWidget(QWidget):
         for i in range(self.tags_list.count()):
             item = self.tags_list.item(i)
             item.setSelected(False)
+    
+    def go_back(self):
+        """Вернуться к списку задач."""
+        self.backRequested.emit()
 
 
 class TasksWidget(QWidget):
@@ -481,9 +536,15 @@ class TasksWidget(QWidget):
         # Страница создания задачи
         self.creator_widget = TaskCreatorWidget(self.current_user_id, self.current_user_name)
         self.creator_widget.taskCreated.connect(self.on_task_created)
+        self.creator_widget.backRequested.connect(self.show_list)
         self.stacked_widget.addWidget(self.creator_widget)
         
         main_layout.addWidget(self.stacked_widget)
+    
+    def show_list(self):
+        """Показать список задач."""
+        self.stacked_widget.setCurrentWidget(self.list_page)
+        self.load_tasks()
     
     def load_tasks(self):
         """Загрузить список задач."""
@@ -493,7 +554,7 @@ class TasksWidget(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         
-        tasks = get_tasks()
+        tasks = get_tasks(current_user_id=self.current_user_id)
         
         if not tasks:
             empty_label = QLabel("Нет задач")
