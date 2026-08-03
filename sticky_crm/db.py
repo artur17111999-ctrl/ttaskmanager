@@ -1063,10 +1063,62 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
         conn.close()
 
 
-def get_tasks(filter_params=None, current_user_id=None):
+def update_task(task_id, title, description, executor_id, status, priority, deadline, observers_ids, tag_ids):
+    """Обновить задачу."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        
+        # Обновляем основную информацию о задаче
+        cursor.execute("""
+            UPDATE tasks
+            SET
+                title=%s,
+                description=%s,
+                executor_id=%s,
+                status=%s,
+                priority=%s,
+                deadline=%s,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=%s
+        """, (title, description, executor_id, status, priority, deadline, task_id))
+        
+        # Удаляем старых наблюдателей и добавляем новых
+        cursor.execute("DELETE FROM task_observers WHERE task_id=%s", (task_id,))
+        for obs_id in observers_ids:
+            cursor.execute(
+                "INSERT INTO task_observers (task_id, employee_id) VALUES (%s, %s)",
+                (task_id, obs_id)
+            )
+        
+        # Удаляем старые теги и добавляем новые
+        cursor.execute("DELETE FROM task_tags_link WHERE task_id=%s", (task_id,))
+        for tag_id in tag_ids:
+            cursor.execute(
+                "INSERT INTO task_tags_link (task_id, tag_id) VALUES (%s, %s)",
+                (task_id, tag_id)
+            )
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка обновления задачи: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', sort_order='DESC'):
     """Получить список задач с фильтрацией.
     Если передан current_user_id, возвращаются задачи, где пользователь
     является автором, исполнителем или наблюдателем.
+    
+    sort_by: 'deadline', 'priority', 'created_at', 'updated_at'
+    sort_order: 'ASC', 'DESC'
     """
     conn = get_connection()
     if not conn:
@@ -1120,6 +1172,16 @@ def get_tasks(filter_params=None, current_user_id=None):
                 conditions.append("t.author_id = %s")
                 params.append(filter_params['author_id'])
             
+            # Поиск по названию
+            if filter_params.get('search'):
+                conditions.append("LOWER(t.title) LIKE LOWER(%s)")
+                params.append(f"%{filter_params['search']}%")
+            
+            # Фильтр "Мои задачи" - только те, где пользователь исполнитель
+            if filter_params.get('my_tasks_only') and current_user_id:
+                conditions.append("t.executor_id = %s")
+                params.append(current_user_id)
+            
             if conditions:
                 # Если уже есть WHERE для current_user_id, используем AND
                 if current_user_id is not None:
@@ -1127,7 +1189,13 @@ def get_tasks(filter_params=None, current_user_id=None):
                 else:
                     query += " WHERE " + " AND ".join(conditions)
         
-        query += " ORDER BY t.created_at DESC"
+        # Сортировка
+        valid_sort_columns = ['deadline', 'priority', 'created_at', 'updated_at']
+        if sort_by in valid_sort_columns:
+            order_direction = 'ASC' if sort_order == 'ASC' else 'DESC'
+            query += f" ORDER BY t.{sort_by} {order_direction}"
+        else:
+            query += " ORDER BY t.created_at DESC"
         
         cursor.execute(query, params)
         tasks = []
