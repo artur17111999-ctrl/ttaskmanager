@@ -318,25 +318,8 @@ class MessageBubble(QFrame):
         self.status_icon.style().polish(self.status_icon)
 
     def show_context_menu(self, position):
-        # Получаем доступ к ChatMessagesArea для проверки режима выделения
-        area = self.parentWidget()
-        while area and not isinstance(area, ChatMessagesArea):
-            area = area.parentWidget()
-        
-        # Определяем режим: есть ли выделенные сообщения
-        selection_mode = bool(area and area.selected_messages)
-        
         menu = QMenu(self)
-        
-        if selection_mode:
-            menu.addAction(
-                "Снять выделение",
-                area.clear_selection
-            )
-            menu.exec(self.mapToGlobal(position))
-            return
-        
-        # обычное меню одного сообщения
+
         if self.is_own and not self.msg_data.get("is_deleted"):
             menu.addAction(
                 "✏️ Редактировать",
@@ -345,41 +328,27 @@ class MessageBubble(QFrame):
                     self.msg_data["text"]
                 )
             )
-        
-        if self.is_own and not self.msg_data.get("is_deleted"):
+
             menu.addAction(
                 "🗑 Удалить сообщение",
                 lambda: self.deleteRequested.emit(self.message_id)
             )
-        
+
         menu.addSeparator()
-        
-        menu.addAction(
-            "Выделить сообщение",
-            self.toggle_selection
-        )
-        
+
+        if self.is_selected:
+            menu.addAction("Снять выделение", self.toggle_selection)
+        else:
+            menu.addAction("Выделить сообщение", self.toggle_selection)
+
         menu.exec(self.mapToGlobal(position))
     
     def mousePressEvent(self, event):
-        # Обработка правой кнопки мыши - Qt сам вызовет customContextMenuRequested
-        if event.button() == Qt.RightButton:
-            super().mousePressEvent(event)
-            return
-        elif event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton:
             # Проверяем, где произошёл клик, используя координаты относительно bubble
             bubble_rect = self.bubble.geometry()
             if bubble_rect.contains(event.pos()):
-                # Клик по пузырю сообщения
-                area = self.parentWidget()
-                while area and not isinstance(area, ChatMessagesArea):
-                    area = area.parentWidget()
-                
-                if area and area.selected_messages:
-                    # Если уже есть выделение - переключаем выделение этого сообщения
-                    self.toggle_selection()
-                    return
-                
+                # Клик по пузырю сообщения - передаём событие дальше
                 super().mousePressEvent(event)
             else:
                 # Клик вне пузыря (слева от него) - выделяем сообщение
