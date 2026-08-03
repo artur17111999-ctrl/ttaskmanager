@@ -1172,10 +1172,11 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
                 conditions.append("t.author_id = %s")
                 params.append(filter_params['author_id'])
             
-            # Поиск по названию
+            # Поиск по названию, описанию и исполнителю
             if filter_params.get('search'):
-                conditions.append("LOWER(t.title) LIKE LOWER(%s)")
-                params.append(f"%{filter_params['search']}%")
+                search_param = f"%{filter_params['search']}%"
+                conditions.append("(LOWER(t.title) LIKE LOWER(%s) OR LOWER(t.description) LIKE LOWER(%s) OR LOWER(e.last_name || ' ' || e.first_name) LIKE LOWER(%s))")
+                params.extend([search_param, search_param, search_param])
             
             # Фильтр "Мои задачи" - только те, где пользователь исполнитель
             if filter_params.get('my_tasks_only') and current_user_id:
@@ -1193,7 +1194,18 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
         valid_sort_columns = ['deadline', 'priority', 'created_at', 'updated_at']
         if sort_by in valid_sort_columns:
             order_direction = 'ASC' if sort_order == 'ASC' else 'DESC'
-            query += f" ORDER BY t.{sort_by} {order_direction}"
+            # Для приоритета используем CASE для правильной сортировки
+            if sort_by == 'priority':
+                query += f""" ORDER BY 
+                    CASE t.priority
+                        WHEN 'Блокер' THEN 4
+                        WHEN 'Критичный' THEN 3
+                        WHEN 'Средний' THEN 2
+                        WHEN 'Низкий' THEN 1
+                        ELSE 0
+                    END {order_direction}"""
+            else:
+                query += f" ORDER BY t.{sort_by} {order_direction}"
         else:
             query += " ORDER BY t.created_at DESC"
         

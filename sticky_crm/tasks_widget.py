@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame, QSplitter, QTextEdit, QLineEdit, QComboBox, QDateEdit,
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QStackedWidget,
-    QDialog, QDialogButtonBox, QGroupBox, QFormLayout
+    QDialog, QGroupBox, QFormLayout
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor
@@ -14,16 +14,13 @@ from db import (
     create_task as db_create_task,
     get_tasks as db_get_tasks,
     get_task_detail,
-    update_task,
-    get_employees
+    update_task
 )
 
 # Константы для ролей данных
 TAG_COLOR_ROLE = Qt.UserRole + 1
 EMPLOYEE_ID_ROLE = Qt.UserRole
-
-# Ограничение размера файла (20 МБ)
-MAX_FILE_SIZE = 20 * 1024 * 1024
+TAG_ID_ROLE = Qt.UserRole + 2
 
 
 class TaskCreatorWidget(QWidget):
@@ -36,7 +33,6 @@ class TaskCreatorWidget(QWidget):
         super().__init__()
         self.current_user_id = current_user_id
         self.current_user_name = current_user_name
-        self.attached_files = []
         self.init_ui()
         self.load_employees()
         self.load_tags()
@@ -93,17 +89,11 @@ class TaskCreatorWidget(QWidget):
         self.description_edit.setMinimumHeight(200)
         left_layout.addWidget(self.description_edit)
         
-        # Прикрепление файлов
-        files_layout = QHBoxLayout()
-        self.files_label = QLabel("Прикрепленные файлы: нет")
-        self.files_label.setObjectName("filesLabel")
-        files_layout.addWidget(self.files_label)
-        
-        attach_btn = QPushButton("📎 Прикрепить файл")
-        attach_btn.setObjectName("attachFileButton")
-        attach_btn.clicked.connect(self.attach_file)
-        files_layout.addWidget(attach_btn)
-        left_layout.addLayout(files_layout)
+        # Информация о файлах (заглушка)
+        files_label = QLabel("📎 Файлы будут доступны позже")
+        files_label.setObjectName("filesLabel")
+        files_label.setStyleSheet("color: #888; font-style: italic;")
+        left_layout.addWidget(files_label)
         
         splitter.addWidget(left_widget)
         
@@ -236,7 +226,7 @@ class TaskCreatorWidget(QWidget):
         
         for tag in tags:
             item = QListWidgetItem(f"{tag[1]}")
-            item.setData(EMPLOYEE_ID_ROLE, tag[0])
+            item.setData(TAG_ID_ROLE, tag[0])
             item.setData(TAG_COLOR_ROLE, tag[2])  # цвет
             
             # Применяем цвет тега
@@ -264,29 +254,14 @@ class TaskCreatorWidget(QWidget):
         
         if tag_id:
             item = QListWidgetItem(tag_name)
-            item.setData(EMPLOYEE_ID_ROLE, tag_id)
+            item.setData(TAG_ID_ROLE, tag_id)
+            # Сохраняем цвет (по умолчанию серый)
+            item.setData(TAG_COLOR_ROLE, "#808080")
+            item.setForeground(QColor("#808080"))
             self.tags_list.addItem(item)
             self.new_tag_edit.clear()
         else:
             QMessageBox.warning(self, "Ошибка", "Не удалось создать тег")
-    
-    def attach_file(self):
-        """Прикрепить файл к задаче."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл")
-        if file_path:
-            # Проверка размера файла
-            import os
-            file_size = os.path.getsize(file_path)
-            if file_size > MAX_FILE_SIZE:
-                QMessageBox.warning(
-                    self,
-                    "Ошибка",
-                    f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // (1024 * 1024)} МБ"
-                )
-                return
-            
-            self.attached_files.append(file_path)
-            self.files_label.setText(f"Прикреплено файлов: {len(self.attached_files)}")
     
     def create_task(self):
         """Создать задачу."""
@@ -339,7 +314,7 @@ class TaskCreatorWidget(QWidget):
         # Получаем теги
         selected_tag_ids = []
         for item in self.tags_list.selectedItems():
-            selected_tag_ids.append(item.data(EMPLOYEE_ID_ROLE))
+            selected_tag_ids.append(item.data(TAG_ID_ROLE))
         
         deadline = self.deadline_edit.date().toString("yyyy-MM-dd")
         priority = self.priority_combo.currentText()
@@ -366,8 +341,6 @@ class TaskCreatorWidget(QWidget):
         
         if task_id:
             QMessageBox.information(self, "Успех", "Задача успешно создана")
-            self.attached_files.clear()
-            self.files_label.setText("Прикрепленные файлы: нет")
             self.taskCreated.emit()
         else:
             QMessageBox.critical(self, "Ошибка", "Не удалось создать задачу")
@@ -377,8 +350,7 @@ class TaskCreatorWidget(QWidget):
         # Проверка, есть ли введенные данные
         has_data = (
             self.title_edit.text().strip() or
-            self.description_edit.toPlainText().strip() or
-            self.attached_files
+            self.description_edit.toPlainText().strip()
         )
         
         if has_data:
@@ -397,8 +369,6 @@ class TaskCreatorWidget(QWidget):
         self.executor_combo.setCurrentIndex(0)
         self.deadline_edit.setDate(QDate.currentDate().addDays(7))
         self.priority_combo.setCurrentIndex(1)
-        self.attached_files.clear()
-        self.files_label.setText("Прикрепленные файлы: нет")
         
         for i in range(self.observers_list.count()):
             item = self.observers_list.item(i)
@@ -415,6 +385,8 @@ class TaskCreatorWidget(QWidget):
 
 class TaskDetailWidget(QDialog):
     """Виджет детального просмотра задачи."""
+    
+    taskUpdated = Signal()  # Сигнал об обновлении задачи
     
     def __init__(self, task_data, parent=None):
         super().__init__(parent)
@@ -583,7 +555,9 @@ class TaskDetailWidget(QDialog):
         if dialog.exec() == QDialog.Accepted:
             # Обновляем данные задачи после редактирования
             self.task_data = dialog.get_updated_task_data()
-            self.init_ui()  # Перерисовываем интерфейс с новыми данными
+            # Эмитим сигнал об обновлении и закрываем диалог
+            self.taskUpdated.emit()
+            self.accept()
 
 
 class TaskEditDialog(QDialog):
@@ -749,7 +723,7 @@ class TaskEditDialog(QDialog):
         self.observers_list.clear()
         
         current_executor_name = self.task_data.get('executor_name', '')
-        executor_index = 0
+        executor_index = -1  # По умолчанию ничего не выбрано
         
         for i, emp in enumerate(employees):
             self.executor_combo.addItem(emp['name'], emp['id'])
@@ -762,7 +736,9 @@ class TaskEditDialog(QDialog):
             item.setCheckState(Qt.Unchecked)
             self.observers_list.addItem(item)
         
-        self.executor_combo.setCurrentIndex(executor_index)
+        # Устанавливаем индекс только если исполнитель найден
+        if executor_index >= 0:
+            self.executor_combo.setCurrentIndex(executor_index)
         
         # Отмечаем текущих наблюдателей
         current_observers = self.task_data.get('observers', [])
@@ -789,7 +765,7 @@ class TaskEditDialog(QDialog):
         
         for tag in tags:
             item = QListWidgetItem(f"{tag[1]}")
-            item.setData(EMPLOYEE_ID_ROLE, tag[0])
+            item.setData(TAG_ID_ROLE, tag[0])
             item.setData(TAG_COLOR_ROLE, tag[2])  # цвет
             
             # Применяем цвет тега
@@ -821,7 +797,10 @@ class TaskEditDialog(QDialog):
         
         if tag_id:
             item = QListWidgetItem(tag_name)
-            item.setData(EMPLOYEE_ID_ROLE, tag_id)
+            item.setData(TAG_ID_ROLE, tag_id)
+            # Сохраняем цвет (по умолчанию серый)
+            item.setData(TAG_COLOR_ROLE, "#808080")
+            item.setForeground(QColor("#808080"))
             self.tags_list.addItem(item)
             self.new_tag_edit.clear()
         else:
@@ -862,7 +841,7 @@ class TaskEditDialog(QDialog):
         # Получаем теги
         selected_tag_ids = []
         for item in self.tags_list.selectedItems():
-            selected_tag_ids.append(item.data(EMPLOYEE_ID_ROLE))
+            selected_tag_ids.append(item.data(TAG_ID_ROLE))
         
         try:
             success = update_task(
@@ -1005,6 +984,11 @@ class TasksWidget(QWidget):
         self.my_tasks_btn.clicked.connect(self.toggle_my_tasks)
         filter_layout.addWidget(self.my_tasks_btn)
         
+        # Кнопка обновления
+        refresh_btn = QPushButton("🔄 Обновить")
+        refresh_btn.clicked.connect(self.load_tasks)
+        filter_layout.addWidget(refresh_btn)
+        
         # Сортировка
         filter_layout.addWidget(QLabel("Сортировать:"))
         self.sort_combo = QComboBox()
@@ -1014,7 +998,7 @@ class TasksWidget(QWidget):
         self.sort_combo.addItem("↑ Приоритет", ("priority", "ASC"))
         self.sort_combo.addItem("↓ Дата создания", ("created_at", "DESC"))
         self.sort_combo.addItem("↑ Дата создания", ("created_at", "ASC"))
-        self.sort_combo.currentIndexChanged.connect(self.apply_filters)
+        self.sort_combo.currentIndexChanged.connect(self.change_sort)
         filter_layout.addWidget(self.sort_combo)
         
         list_layout.addLayout(filter_layout)
@@ -1116,14 +1100,23 @@ class TasksWidget(QWidget):
         executor_data = self.executor_filter.currentData()
         self.filter_params['executor_id'] = executor_data
         
-        # Поиск по названию
+        # Поиск по названию, описанию и исполнителю
         self.filter_params['search'] = self.search_edit.text().strip()
         
         self.load_tasks()
     
     def toggle_my_tasks(self):
         """Переключить фильтр 'Мои задачи'."""
-        self.filter_params['my_tasks_only'] = self.my_tasks_btn.isChecked()
+        checked = self.my_tasks_btn.isChecked()
+        self.my_tasks_btn.setText(
+            "Все задачи" if checked else "Мои задачи"
+        )
+        self.filter_params['my_tasks_only'] = checked
+        self.load_tasks()
+    
+    def change_sort(self):
+        """Изменить сортировку."""
+        self.sort_params = self.sort_combo.currentData()
         self.load_tasks()
     
     def create_task_card(self, task_data, today=None):
@@ -1163,7 +1156,7 @@ class TasksWidget(QWidget):
         task_id_label.setStyleSheet("font-weight: bold; color: #666;")
         header_layout.addWidget(task_id_label)
         
-        title_label = QLabel(task_data['title'])
+        title_label = QLabel(task_data.get('title', 'Без названия'))
         title_label.setObjectName("taskTitleLabel")
         header_layout.addWidget(title_label)
         
@@ -1188,9 +1181,10 @@ class TasksWidget(QWidget):
             "Критичный": "priorityCritical",
             "Блокер": "priorityBlocker"
         }
-        priority_class = priority_class_map.get(task_data['priority'], "")
+        priority = task_data.get('priority', 'Средний')
+        priority_class = priority_class_map.get(priority, "")
         
-        priority_label = QLabel(task_data['priority'])
+        priority_label = QLabel(priority)
         if priority_class:
             priority_label.setObjectName(priority_class)
         header_layout.addWidget(priority_label)
@@ -1198,7 +1192,7 @@ class TasksWidget(QWidget):
         layout.addLayout(header_layout)
         
         # Описание (обрезанное)
-        desc = task_data['description'] or "Нет описания"
+        desc = task_data.get('description') or "Нет описания"
         if len(desc) > 150:
             desc = desc[:150] + "..."
         
@@ -1210,11 +1204,12 @@ class TasksWidget(QWidget):
         # Информация об исполнителе и дедлайне
         info_layout = QHBoxLayout()
         
-        executor_label = QLabel(f"👤 {task_data['executor_name']}")
+        executor_name = task_data.get('executor_name', 'Не назначен')
+        executor_label = QLabel(f"👤 {executor_name}")
         executor_label.setObjectName("executorInfoLabel")
         info_layout.addWidget(executor_label)
         
-        if task_data['deadline']:
+        if task_data.get('deadline'):
             deadline_label = QLabel(f"📅 {task_data['deadline']}")
             deadline_label.setObjectName("deadlineInfoLabel")
             
@@ -1229,7 +1224,8 @@ class TasksWidget(QWidget):
         
         info_layout.addStretch()
         
-        author_label = QLabel(f"Автор: {task_data['author_name']}")
+        author_name = task_data.get('author_name', 'Неизвестно')
+        author_label = QLabel(f"Автор: {author_name}")
         author_label.setObjectName("authorInfoLabel")
         info_layout.addWidget(author_label)
         
@@ -1243,6 +1239,8 @@ class TasksWidget(QWidget):
             detail = get_task_detail(task_id)
             if detail:
                 dialog = TaskDetailWidget(detail, self)
+                # Подключаем сигнал обновления к перезагрузке списка
+                dialog.taskUpdated.connect(self.load_tasks)
                 dialog.exec()
             else:
                 QMessageBox.warning(
