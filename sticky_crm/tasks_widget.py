@@ -986,7 +986,7 @@ class TasksWidget(QWidget):
         
         # Кнопка обновления
         refresh_btn = QPushButton("🔄 Обновить")
-        refresh_btn.clicked.connect(self.load_tasks)
+        refresh_btn.clicked.connect(lambda: self.load_tasks())
         filter_layout.addWidget(refresh_btn)
         
         # Сортировка
@@ -1096,9 +1096,12 @@ class TasksWidget(QWidget):
         priority_data = self.priority_filter.currentData()
         self.filter_params['priority'] = priority_data
         
-        # Исполнитель
-        executor_data = self.executor_filter.currentData()
-        self.filter_params['executor_id'] = executor_data
+        # Исполнитель - только если не выбраны "Мои задачи"
+        if not self.filter_params.get('my_tasks_only'):
+            executor_data = self.executor_filter.currentData()
+            self.filter_params['executor_id'] = executor_data
+        else:
+            self.filter_params['executor_id'] = None
         
         # Поиск по названию, описанию и исполнителю
         self.filter_params['search'] = self.search_edit.text().strip()
@@ -1112,6 +1115,10 @@ class TasksWidget(QWidget):
             "Все задачи" if checked else "Мои задачи"
         )
         self.filter_params['my_tasks_only'] = checked
+        # Сбрасываем фильтр исполнителя при включении "Мои задачи"
+        if checked:
+            self.filter_params['executor_id'] = None
+            self.executor_filter.setCurrentIndex(0)  # "Все"
         self.load_tasks()
     
     def change_sort(self):
