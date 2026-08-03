@@ -285,6 +285,22 @@ QLabel#authorInfoLabel {
     font-size: 12px;
 }
 
+/* Кнопка удаления задачи */
+QPushButton#deleteTaskButton {
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 8px 16px;
+    min-height: 35px;
+}
+
+QPushButton#deleteTaskButton:hover {
+    background-color: #b71c1c;
+}
+
 /* Метка пустого списка задач */
 QLabel#emptyTasksLabel {
     font-size: 18px;

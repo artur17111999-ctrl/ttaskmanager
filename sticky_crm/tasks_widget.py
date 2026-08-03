@@ -384,16 +384,16 @@ class TaskCreatorWidget(QWidget):
         self.backRequested.emit()
 
 
-class TaskDetailWidget(QDialog):
+class TaskDetailWidget(QWidget):
     """Виджет детального просмотра задачи."""
     
     taskUpdated = Signal()  # Сигнал об обновлении задачи
+    backRequested = Signal()  # Сигнал возврата назад
     
-    def __init__(self, task_data, parent=None):
+    def __init__(self, task_data, current_user_id, parent=None):
         super().__init__(parent)
         self.task_data = task_data
-        self.setWindowTitle(f"Задача №{task_data['id']}")
-        self.setMinimumSize(700, 600)
+        self.current_user_id = current_user_id
         self.init_ui()
     
     def init_ui(self):
@@ -535,20 +535,37 @@ class TaskDetailWidget(QDialog):
         
         # Кнопки действий
         buttons_layout = QHBoxLayout()
+        
+        # Кнопка назад
+        back_btn = QPushButton("← Назад")
+        back_btn.setObjectName("backButton")
+        back_btn.clicked.connect(self.go_back)
+        buttons_layout.addWidget(back_btn)
+        
         buttons_layout.addStretch()
         
-        # Кнопка редактирования
-        self.edit_btn = QPushButton("✏ Редактировать")
-        self.edit_btn.setObjectName("editTaskButton")
-        self.edit_btn.clicked.connect(self.edit_task)
-        buttons_layout.addWidget(self.edit_btn)
+        # Кнопка редактирования (только если пользователь - автор или исполнитель)
+        is_author = self.task_data.get('author_id') == self.current_user_id
+        is_executor = self.task_data.get('executor_id') == self.current_user_id
         
-        # Кнопка закрытия
-        close_btn = QPushButton("Закрыть")
-        close_btn.setObjectName("closeButton")
-        close_btn.clicked.connect(self.accept)
-        buttons_layout.addWidget(close_btn)
+        if is_author or is_executor:
+            self.edit_btn = QPushButton("✏ Редактировать")
+            self.edit_btn.setObjectName("editTaskButton")
+            self.edit_btn.clicked.connect(self.edit_task)
+            buttons_layout.addWidget(self.edit_btn)
+        
+        # Кнопка удаления (только если пользователь - автор)
+        if is_author:
+            delete_btn = QPushButton("Удалить")
+            delete_btn.setObjectName("deleteTaskButton")
+            delete_btn.clicked.connect(self.delete_task)
+            buttons_layout.addWidget(delete_btn)
+        
         main_layout.addLayout(buttons_layout)
+    
+    def go_back(self):
+        """Вернуться к списку задач."""
+        self.backRequested.emit()
     
     def edit_task(self):
         """Открыть диалог редактирования задачи."""
@@ -556,9 +573,59 @@ class TaskDetailWidget(QDialog):
         if dialog.exec() == QDialog.Accepted:
             # Обновляем данные задачи после редактирования
             self.task_data = dialog.get_updated_task_data()
-            # Эмитим сигнал об обновлении и закрываем диалог
+            # Эмитим сигнал об обновлении
             self.taskUpdated.emit()
-            self.accept()
+            # Перезагружаем виджет с новыми данными
+            self.refresh_data()
+    
+    def refresh_data(self):
+        """Обновить данные задачи."""
+        # Получаем свежие данные из БД
+        try:
+            from db import get_task_detail
+            fresh_data = get_task_detail(self.task_data['id'])
+            if fresh_data:
+                self.task_data = fresh_data
+                # Пересоздаём интерфейс с новыми данными
+                self.clear_layout(main_layout)
+                self.init_ui()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось обновить данные задачи:\n{e}"
+            )
+    
+    def clear_layout(self, layout):
+        """Очистить макет от всех виджетов."""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+    
+    def delete_task(self):
+        """Удалить задачу."""
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение удаления",
+            "Вы уверены, что хотите удалить эту задачу?\nЭто действие нельзя отменить.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        from db import delete_task
+        success, message = delete_task(self.task_data['id'], self.current_user_id)
+        
+        if success:
+            QMessageBox.information(self, "Успех", message)
+            self.taskUpdated.emit()
+            self.go_back()
+        else:
+            QMessageBox.critical(self, "Ошибка", message)
 
 
 class TaskEditDialog(QDialog):
@@ -1027,6 +1094,12 @@ class TasksWidget(QWidget):
         self.creator_widget.backRequested.connect(self.show_list)
         self.stacked_widget.addWidget(self.creator_widget)
         
+        # Страница детального просмотра задачи (изначально пустая)
+        self.detail_page = QWidget()
+        self.detail_layout = QVBoxLayout(self.detail_page)
+        self.detail_layout.setContentsMargins(0, 0, 0, 0)
+        self.stacked_widget.addWidget(self.detail_page)
+        
         main_layout.addWidget(self.stacked_widget)
         
         # Сохраняем текущие параметры фильтрации
@@ -1235,9 +1308,8 @@ class TasksWidget(QWidget):
         
         # Кнопка удаления (только если пользователь - автор)
         if task_data.get('author_id') == self.current_user_id:
-            delete_btn = QPushButton("🗑")
+            delete_btn = QPushButton("Удалить")
             delete_btn.setObjectName("deleteTaskButton")
-            delete_btn.setMaximumWidth(30)
             delete_btn.setToolTip("Удалить задачу")
             delete_btn.clicked.connect(lambda checked, tid=task_data['id']: self.delete_task(tid))
             info_layout.addWidget(delete_btn)
@@ -1245,20 +1317,26 @@ class TasksWidget(QWidget):
         layout.addLayout(info_layout)
         
         # Делаем карточку кликабельной (кроме кнопки удаления)
-        card.mousePressEvent = lambda e: self.open_task(task_data['id'])
+        card.mousePressEvent = lambda e: self.open_task_detail(task_data['id'])
         card.setCursor(Qt.PointingHandCursor)
         
         return card
     
-    def open_task(self, task_id):
+    def open_task_detail(self, task_id):
         """Открыть детальную информацию о задаче."""
         try:
             detail = get_task_detail(task_id)
             if detail:
-                dialog = TaskDetailWidget(detail, self)
-                # Подключаем сигнал обновления к перезагрузке списка
-                dialog.taskUpdated.connect(self.load_tasks)
-                dialog.exec()
+                # Очищаем предыдущий виджет детали
+                self.clear_layout(self.detail_layout)
+                
+                # Создаём новый виджет детали
+                self.detail_widget = TaskDetailWidget(detail, self.current_user_id)
+                self.detail_widget.taskUpdated.connect(self.load_tasks_and_show_list)
+                self.detail_widget.backRequested.connect(self.show_list)
+                
+                self.detail_layout.addWidget(self.detail_widget)
+                self.stacked_widget.setCurrentWidget(self.detail_page)
             else:
                 QMessageBox.warning(
                     self,
@@ -1271,6 +1349,11 @@ class TasksWidget(QWidget):
                 "Ошибка",
                 f"Не удалось загрузить задачу:\n{e}"
             )
+    
+    def load_tasks_and_show_list(self):
+        """Загрузить задачи и показать список."""
+        self.load_tasks()
+        self.show_list()
     
     def delete_task(self, task_id):
         """Удалить задачу (только если пользователь - автор)."""
