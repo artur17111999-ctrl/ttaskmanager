@@ -318,44 +318,53 @@ class MessageBubble(QFrame):
         self.status_icon.style().polish(self.status_icon)
 
     def show_context_menu(self, position):
-        # Получаем доступ к родительскому виджету для управления кнопками
-        # Ищем ContactsWidget через цепочку родителей
+        # Получаем доступ к ChatMessagesArea для проверки режима выделения
+        area = self.parentWidget()
+        while area and not isinstance(area, ChatMessagesArea):
+            area = area.parentWidget()
+        
+        # Определяем режим: есть ли выделенные сообщения
+        selection_mode = area and len(area.selected_messages) > 0
+        
+        # Получаем доступ к ContactsWidget для управления кнопками
         parent_widget = self.window()
         while parent_widget and not isinstance(parent_widget, ContactsWidget):
             parent_widget = parent_widget.parentWidget()
         
         menu = QMenu(self)
         
-        # Добавляем действие для удаления выделенных
-        delete_action = QAction("🗑 Удалить выделенные", self)
-        delete_action.triggered.connect(lambda: self._delete_selected_from_menu(parent_widget))
-        menu.addAction(delete_action)
-        
-        # Добавляем действие для пересылки выделенных
-        forward_action = QAction("✉ Переслать выделенные", self)
-        forward_action.triggered.connect(lambda: self._forward_selected_from_menu(parent_widget))
-        menu.addAction(forward_action)
-        
-        menu.addSeparator()
-        
-        # Если сообщение не выделено, добавляем опцию выделения
-        if not self.is_selected:
-            select_action = QAction("Выделить сообщение", self)
-            select_action.triggered.connect(lambda: self.toggle_selection())
-            menu.addAction(select_action)
-        else:
-            # Добавляем действие для редактирования (только для своих сообщений)
-            if self.is_own:
-                edit_action = QAction("Редактировать", self)
-                edit_action.triggered.connect(
-                    lambda: self.editRequested.emit(self.message_id, self.msg_data["text"])
-                )
-                menu.addAction(edit_action)
+        if selection_mode:
+            # Режим множественного выделения
+            menu.addAction("🗑 Удалить выделенные",
+                           lambda: self._delete_selected_from_menu(parent_widget))
             
-            # Добавляем действие для снятия выделения
-            deselect_action = QAction("Снять выделение", self)
-            deselect_action.triggered.connect(lambda: self.toggle_selection())
-            menu.addAction(deselect_action)
+            menu.addAction("✉ Переслать выделенные",
+                           lambda: self._forward_selected_from_menu(parent_widget))
+            
+            menu.addSeparator()
+            
+            if self.is_selected:
+                menu.addAction("Снять выделение",
+                               lambda: self.toggle_selection())
+            else:
+                menu.addAction("Выделить сообщение",
+                               lambda: self.toggle_selection())
+        else:
+            # Обычный режим - контекстное меню для одного сообщения
+            if self.is_own and not self.msg_data.get("is_deleted"):
+                menu.addAction("✏️ Редактировать",
+                               lambda: self.editRequested.emit(
+                                   self.message_id,
+                                   self.msg_data["text"]))
+            
+            if not self.msg_data.get("is_deleted"):
+                menu.addAction("🗑 Удалить сообщение",
+                               lambda: self.deleteRequested.emit(self.message_id))
+            
+            menu.addSeparator()
+            
+            menu.addAction("Выделить сообщение",
+                           lambda: self.toggle_selection())
         
         menu.exec(self.mapToGlobal(position))
     
@@ -372,12 +381,20 @@ class MessageBubble(QFrame):
     def mousePressEvent(self, event):
         # Обработка правой кнопки мыши - Qt сам вызовет customContextMenuRequested
         if event.button() == Qt.RightButton:
-            # Не обрабатываем здесь, Qt автоматически вызовет customContextMenuRequested
             super().mousePressEvent(event)
             return
         elif event.button() == Qt.LeftButton:
-            # Левая кнопка - выделяем сообщение
-            self.toggle_selection()
+            # Проверяем, где произошёл клик
+            # Получаем позицию клика относительно bubble
+            pos_in_bubble = self.bubble.mapFromGlobal(self.mapToGlobal(event.pos()))
+            
+            if self.bubble.rect().contains(pos_in_bubble):
+                # Клик по пузырю сообщения - обычный клик, не выделяем
+                super().mousePressEvent(event)
+            else:
+                # Клик вне пузыря (слева от него) - выделяем сообщение
+                self.toggle_selection()
+            return
         super().mousePressEvent(event)
 
     def toggle_selection(self):
