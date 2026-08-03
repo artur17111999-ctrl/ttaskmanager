@@ -1119,7 +1119,7 @@ class TasksWidget(QWidget):
         if checked:
             self.filter_params['executor_id'] = None
             self.executor_filter.setCurrentIndex(0)  # "Все"
-        self.load_tasks()
+        self.apply_filters()
     
     def change_sort(self):
         """Изменить сортировку."""
