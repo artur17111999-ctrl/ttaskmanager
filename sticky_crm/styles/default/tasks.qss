@@ -105,6 +105,40 @@ QLabel#authorInfoLabel {
 
 
 /* ===============================
+   BUTTONS
+   =============================== */
+
+/* Кнопка удаления задачи (красная) */
+QPushButton#deleteTaskButton {
+    background: qlineargradient(
+        x1:0, y1:0,
+        x2:1, y2:1,
+        stop:0 #e74c3c,
+        stop:1 #c0392b
+    );
+    color: white;
+    border: none;
+    border-radius: 14px;
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QPushButton#deleteTaskButton:hover {
+    background: qlineargradient(
+        x1:0, y1:0,
+        x2:1, y2:1,
+        stop:0 #ff6b5b,
+        stop:1 #e74c3c
+    );
+}
+
+QPushButton#deleteTaskButton:pressed {
+    background: #a93226;
+}
+
+
+/* ===============================
    PRIORITY BADGES
    =============================== */
 

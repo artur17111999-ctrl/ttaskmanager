@@ -5,44 +5,32 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
 # Dependencies
 .venv/
 venv/
-env/
-ENV/
-
-# Logs
-*.log
-
-# Environment variables
 .env
-.env.local
-*.env.*
+*.env
 
-# Editor/IDE
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# Build artifacts
-dist/
-build/
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
+# Logs
+*.log
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
 
 # Testing
-.coverage
-htmlcov/
-.coverage.*
-.nox/
-.tox/
-
-# OS generated
-.DS_Store
-Thumbs.db
+.pytest_cache/
+.mypy_cache/
 ```

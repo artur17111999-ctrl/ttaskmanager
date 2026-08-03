@@ -385,7 +385,7 @@ class TaskCreatorWidget(QWidget):
 
 
 class TaskDetailWidget(QDialog):
-    """Виджет детального просмотра задачи."""
+    """Виджет детального просмотра задачи (для обратной совместимости)."""
     
     taskUpdated = Signal()  # Сигнал об обновлении задачи
     
@@ -889,6 +889,285 @@ class TaskEditDialog(QDialog):
         return self.updated_data
 
 
+class TaskDetailView(QWidget):
+    """Виджет детального просмотра задачи (аналогично созданию задачи)."""
+    
+    taskUpdated = Signal()  # Сигнал об обновлении задачи
+    backRequested = Signal()  # Сигнал возврата назад
+    
+    def __init__(self, task_id, current_user_id, current_user_name):
+        super().__init__()
+        self.task_id = task_id
+        self.current_user_id = current_user_id
+        self.current_user_name = current_user_name
+        self.task_data = None
+        self.init_ui()
+        self.load_task_data()
+    
+    def init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+        
+        # Заголовок и кнопка назад
+        header_layout = QHBoxLayout()
+        
+        back_btn = QPushButton("← Назад")
+        back_btn.setObjectName("backButton")
+        header_layout.addWidget(back_btn)
+        back_btn.clicked.connect(self.go_back)
+        
+        header_layout.addStretch()
+        
+        self.header_label = QLabel("Задача")
+        self.header_label.setObjectName("taskHeaderLabel")
+        header_layout.addWidget(self.header_label)
+        
+        header_layout.addStretch()
+        
+        # Пустой спейсер для баланса
+        empty_spacer = QLabel("")
+        empty_spacer.setMinimumWidth(100)
+        header_layout.addWidget(empty_spacer)
+        
+        main_layout.addLayout(header_layout)
+        
+        # Основной контент в скролл-области
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(15)
+        
+        # Название задачи
+        title_group = QGroupBox("Название")
+        title_layout = QVBoxLayout(title_group)
+        self.title_label = QLabel("")
+        self.title_label.setWordWrap(True)
+        self.title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        title_layout.addWidget(self.title_label)
+        content_layout.addWidget(title_group)
+        
+        # Описание
+        desc_group = QGroupBox("Описание")
+        desc_layout = QVBoxLayout(desc_group)
+        self.desc_text = QTextEdit()
+        self.desc_text.setReadOnly(True)
+        self.desc_text.setMinimumHeight(150)
+        self.desc_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        desc_layout.addWidget(self.desc_text)
+        content_layout.addWidget(desc_group)
+        
+        # Информация (Автор, Исполнитель, Статус, Приоритет, Дедлайн)
+        info_group = QGroupBox("Информация")
+        info_layout = QFormLayout(info_group)
+        
+        self.author_label_val = QLabel("")
+        info_layout.addRow("Автор:", self.author_label_val)
+        
+        self.executor_label_val = QLabel("")
+        info_layout.addRow("Исполнитель:", self.executor_label_val)
+        
+        self.status_label_val = QLabel("")
+        info_layout.addRow("Статус:", self.status_label_val)
+        
+        self.priority_label_val = QLabel("")
+        info_layout.addRow("Приоритет:", self.priority_label_val)
+        
+        self.deadline_label_val = QLabel("")
+        info_layout.addRow("Дедлайн:", self.deadline_label_val)
+        
+        self.created_at_label_val = QLabel("")
+        info_layout.addRow("Создана:", self.created_at_label_val)
+        
+        content_layout.addWidget(info_group)
+        
+        # Наблюдатели
+        self.observers_group = QGroupBox("Наблюдатели")
+        observers_layout = QVBoxLayout(self.observers_group)
+        self.observers_list = QListWidget()
+        self.observers_list.setMaximumHeight(100)
+        observers_layout.addWidget(self.observers_list)
+        content_layout.addWidget(self.observers_group)
+        
+        # Теги
+        self.tags_group = QGroupBox("Теги")
+        tags_layout = QVBoxLayout(self.tags_group)
+        self.tags_list = QListWidget()
+        self.tags_list.setMaximumHeight(100)
+        tags_layout.addWidget(self.tags_list)
+        content_layout.addWidget(self.tags_group)
+        
+        # Комментарии (заглушка)
+        comments_group = QGroupBox("Комментарии")
+        comments_layout = QVBoxLayout(comments_group)
+        comments_placeholder = QLabel("Комментарии пока не реализованы")
+        comments_placeholder.setAlignment(Qt.AlignCenter)
+        comments_placeholder.setStyleSheet("color: gray;")
+        comments_layout.addWidget(comments_placeholder)
+        content_layout.addWidget(comments_group)
+        
+        # Файлы (заглушка)
+        files_group = QGroupBox("Файлы")
+        files_layout = QVBoxLayout(files_group)
+        files_placeholder = QLabel("Файлы пока не реализованы")
+        files_placeholder.setAlignment(Qt.AlignCenter)
+        files_placeholder.setStyleSheet("color: gray;")
+        files_layout.addWidget(files_placeholder)
+        content_layout.addWidget(files_group)
+        
+        # История изменений (заглушка)
+        history_group = QGroupBox("История изменений")
+        history_layout = QVBoxLayout(history_group)
+        history_placeholder = QLabel("История изменений пока не реализована")
+        history_placeholder.setAlignment(Qt.AlignCenter)
+        history_placeholder.setStyleSheet("color: gray;")
+        history_layout.addWidget(history_placeholder)
+        content_layout.addWidget(history_group)
+        
+        content_layout.addStretch()
+        
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
+        
+        # Кнопки действий
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addStretch()
+        
+        # Кнопка редактирования (показывается только если пользователь - исполнитель или автор)
+        self.edit_btn = QPushButton("✏ Редактировать")
+        self.edit_btn.setObjectName("editTaskButton")
+        self.edit_btn.clicked.connect(self.edit_task)
+        buttons_layout.addWidget(self.edit_btn)
+        
+        # Кнопка удаления (только если пользователь - автор)
+        self.delete_btn = QPushButton("Удалить")
+        self.delete_btn.setObjectName("deleteTaskButton")
+        self.delete_btn.clicked.connect(self.confirm_delete)
+        buttons_layout.addWidget(self.delete_btn)
+        
+        main_layout.addLayout(buttons_layout)
+    
+    def load_task_data(self):
+        """Загрузить данные задачи."""
+        try:
+            detail = get_task_detail(self.task_id)
+            if detail:
+                self.task_data = detail
+                self.update_ui()
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Ошибка",
+                    "Задача не найдена"
+                )
+                self.go_back()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить задачу:\n{e}"
+            )
+    
+    def update_ui(self):
+        """Обновить UI данными задачи."""
+        if not self.task_data:
+            return
+        
+        self.header_label.setText(f"Задача №{self.task_data['id']}")
+        self.title_label.setText(self.task_data.get('title', 'N/A'))
+        self.desc_text.setPlainText(self.task_data.get('description', 'N/A'))
+        
+        self.author_label_val.setText(self.task_data.get('author_name', 'N/A'))
+        self.executor_label_val.setText(self.task_data.get('executor_name', 'N/A'))
+        self.status_label_val.setText(self.task_data.get('status', 'N/A'))
+        self.priority_label_val.setText(self.task_data.get('priority', 'N/A'))
+        
+        deadline_val = self.task_data.get('deadline')
+        deadline_str = str(deadline_val) if deadline_val else 'Не установлен'
+        self.deadline_label_val.setText(deadline_str)
+        
+        created_at_val = self.task_data.get('created_at')
+        created_at_str = str(created_at_val)[:19] if created_at_val else 'N/A'
+        self.created_at_label_val.setText(created_at_str)
+        
+        # Наблюдатели
+        self.observers_list.clear()
+        observers = self.task_data.get('observers', [])
+        if observers:
+            for obs in observers:
+                item = QListWidgetItem(obs)
+                self.observers_list.addItem(item)
+        else:
+            item = QListWidgetItem("Нет наблюдателей")
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+            self.observers_list.addItem(item)
+        
+        # Теги
+        self.tags_list.clear()
+        tags = self.task_data.get('tags', [])
+        if tags:
+            for tag in tags:
+                item = QListWidgetItem(tag['name'])
+                if tag.get('color'):
+                    item.setForeground(QColor(tag['color']))
+                self.tags_list.addItem(item)
+        else:
+            item = QListWidgetItem("Нет тегов")
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
+            self.tags_list.addItem(item)
+        
+        # Показываем/скрываем кнопку удаления в зависимости от прав
+        is_author = self.task_data.get('author_id') == self.current_user_id
+        self.delete_btn.setVisible(is_author)
+    
+    def edit_task(self):
+        """Открыть диалог редактирования задачи."""
+        if not self.task_data:
+            return
+        
+        dialog = TaskEditDialog(self.task_data, self.parent())
+        if dialog.exec() == QDialog.Accepted:
+            # Обновляем данные задачи после редактирования
+            self.task_data = dialog.get_updated_task_data()
+            # Эмитим сигнал об обновлении и возвращаемся к списку
+            self.taskUpdated.emit()
+            self.go_back()
+    
+    def confirm_delete(self):
+        """Подтверждение удаления задачи."""
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение удаления",
+            "Вы уверены, что хотите удалить эту задачу?\nЭто действие нельзя отменить.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        self.delete_task()
+    
+    def delete_task(self):
+        """Удалить задачу."""
+        success, message = delete_task(self.task_id, self.current_user_id)
+        
+        if success:
+            QMessageBox.information(self, "Успех", message)
+            self.taskUpdated.emit()
+            self.go_back()
+        else:
+            QMessageBox.critical(self, "Ошибка", message)
+    
+    def go_back(self):
+        """Вернуться к списку задач."""
+        self.backRequested.emit()
+
+
 class TasksWidget(QWidget):
     """Основной виджет управления задачами."""
     
@@ -1026,6 +1305,9 @@ class TasksWidget(QWidget):
         self.creator_widget.taskCreated.connect(self.on_task_created)
         self.creator_widget.backRequested.connect(self.show_list)
         self.stacked_widget.addWidget(self.creator_widget)
+        
+        # Инициализация переменной для виджета детального просмотра
+        self.detail_widget = None
         
         main_layout.addWidget(self.stacked_widget)
         
@@ -1235,9 +1517,8 @@ class TasksWidget(QWidget):
         
         # Кнопка удаления (только если пользователь - автор)
         if task_data.get('author_id') == self.current_user_id:
-            delete_btn = QPushButton("🗑")
+            delete_btn = QPushButton("Удалить")
             delete_btn.setObjectName("deleteTaskButton")
-            delete_btn.setMaximumWidth(30)
             delete_btn.setToolTip("Удалить задачу")
             delete_btn.clicked.connect(lambda checked, tid=task_data['id']: self.delete_task(tid))
             info_layout.addWidget(delete_btn)
@@ -1251,26 +1532,20 @@ class TasksWidget(QWidget):
         return card
     
     def open_task(self, task_id):
-        """Открыть детальную информацию о задаче."""
-        try:
-            detail = get_task_detail(task_id)
-            if detail:
-                dialog = TaskDetailWidget(detail, self)
-                # Подключаем сигнал обновления к перезагрузке списка
-                dialog.taskUpdated.connect(self.load_tasks)
-                dialog.exec()
-            else:
-                QMessageBox.warning(
-                    self,
-                    "Ошибка",
-                    "Задача не найдена"
-                )
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Ошибка",
-                f"Не удалось загрузить задачу:\n{e}"
-            )
+        """Открыть детальную информацию о задаче (переход на страницу задачи)."""
+        # Создаем виджет детального просмотра
+        self.detail_widget = TaskDetailView(task_id, self.current_user_id, self.current_user_name)
+        self.detail_widget.taskUpdated.connect(self.on_task_updated)
+        self.detail_widget.backRequested.connect(self.show_list)
+        
+        # Добавляем в stacked_widget и переключаемся
+        self.stacked_widget.addWidget(self.detail_widget)
+        self.stacked_widget.setCurrentWidget(self.detail_widget)
+    
+    def on_task_updated(self):
+        """Обработчик обновления задачи."""
+        self.load_tasks()
+        self.show_list()
     
     def delete_task(self, task_id):
         """Удалить задачу (только если пользователь - автор)."""
