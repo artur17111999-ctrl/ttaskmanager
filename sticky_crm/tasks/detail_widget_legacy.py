@@ -4,9 +4,10 @@
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QTextEdit, QListWidget, QListWidgetItem, QGroupBox, QFormLayout, QMessageBox
+    QTextEdit, QListWidget, QListWidgetItem, QGroupBox, QFormLayout, QMessageBox,
+    QWidget
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 
 
