@@ -43,21 +43,6 @@ class TaskCreatorWidget(QWidget):
         
         back_btn = QPushButton("← Назад")
         back_btn.setObjectName("backButton")
-        back_btn.setMinimumHeight(35)
-        back_btn.setMinimumWidth(100)
-        back_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e0e0e0;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 13px;
-                padding: 6px 12px;
-                color: #333333;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-        """)
         header_layout.addWidget(back_btn)
         back_btn.clicked.connect(self.go_back)
         
@@ -65,7 +50,6 @@ class TaskCreatorWidget(QWidget):
         
         header_label = QLabel("Создание новой задачи")
         header_label.setObjectName("taskHeaderLabel")
-        header_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 5px;")
         header_layout.addWidget(header_label)
         
         header_layout.addStretch()
@@ -89,59 +73,27 @@ class TaskCreatorWidget(QWidget):
         # Наименование задачи
         left_layout.addWidget(QLabel("Наименование задачи:"))
         self.title_edit = QLineEdit()
+        self.title_edit.setObjectName("titleEdit")
         self.title_edit.setPlaceholderText("Введите название задачи")
-        self.title_edit.setMinimumHeight(40)
-        self.title_edit.setStyleSheet("""
-            QLineEdit {
-                padding: 10px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #0078d4;
-            }
-        """)
         left_layout.addWidget(self.title_edit)
         
         # Полное описание
         left_layout.addWidget(QLabel("Полное описание задачи:"))
         self.description_edit = QTextEdit()
+        self.description_edit.setObjectName("descriptionEdit")
         self.description_edit.setPlaceholderText("Введите подробное описание задачи")
         self.description_edit.setMinimumHeight(200)
-        self.description_edit.setStyleSheet("""
-            QTextEdit {
-                padding: 10px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 14px;
-            }
-            QTextEdit:focus {
-                border: 2px solid #0078d4;
-            }
-        """)
         left_layout.addWidget(self.description_edit)
         
         # Прикрепление файлов
         files_layout = QHBoxLayout()
         self.files_label = QLabel("Прикрепленные файлы: нет")
-        self.files_label.setStyleSheet("color: #666;")
+        self.files_label.setObjectName("filesLabel")
         files_layout.addWidget(self.files_label)
         
         attach_btn = QPushButton("📎 Прикрепить файл")
+        attach_btn.setObjectName("attachFileButton")
         attach_btn.clicked.connect(self.attach_file)
-        attach_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e0e0e0;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 8px 15px;
-                color: #333333;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-        """)
         files_layout.addWidget(attach_btn)
         left_layout.addLayout(files_layout)
         
@@ -156,41 +108,19 @@ class TaskCreatorWidget(QWidget):
         # Автор (автоматически)
         right_layout.addWidget(QLabel("Автор:"))
         self.author_label = QLabel(self.current_user_name)
-        self.author_label.setStyleSheet("""
-            QLabel {
-                padding: 10px;
-                font-weight: bold;
-                color: white;
-            }
-        """)
+        self.author_label.setObjectName("authorLabel")
         right_layout.addWidget(self.author_label)
         
         # Исполнитель
         right_layout.addWidget(QLabel("Исполнитель:"))
         self.executor_combo = QComboBox()
-        self.executor_combo.setMinimumHeight(40)
-        self.executor_combo.setStyleSheet("""
-            QComboBox {
-                padding: 8px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-            QComboBox:focus {
-                border: 2px solid #0078d4;
-            }
-        """)
+        self.executor_combo.setObjectName("executorCombo")
         right_layout.addWidget(self.executor_combo)
         
         # Наблюдатели
         right_layout.addWidget(QLabel("Наблюдатели:"))
         self.observers_list = QListWidget()
-        self.observers_list.setMinimumHeight(100)
-        self.observers_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-        """)
+        self.observers_list.setObjectName("observersList")
         right_layout.addWidget(self.observers_list)
         
         # Теги
@@ -199,36 +129,19 @@ class TaskCreatorWidget(QWidget):
         
         self.tags_list = QListWidget()
         self.tags_list.setSelectionMode(QListWidget.MultiSelection)
-        self.tags_list.setMinimumHeight(80)
-        self.tags_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-        """)
+        self.tags_list.setObjectName("tagsList")
         tags_layout.addWidget(self.tags_list)
         
         create_tag_layout = QHBoxLayout()
         self.new_tag_edit = QLineEdit()
+        self.new_tag_edit.setObjectName("newTagEdit")
         self.new_tag_edit.setPlaceholderText("Новый тег")
-        self.new_tag_edit.setMinimumHeight(35)
         create_tag_layout.addWidget(self.new_tag_edit)
         
         create_tag_btn = QPushButton("➕")
+        create_tag_btn.setObjectName("createTagButton")
         create_tag_btn.setMaximumWidth(40)
         create_tag_btn.clicked.connect(self.create_new_tag)
-        create_tag_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #0063b1;
-            }
-        """)
         create_tag_layout.addWidget(create_tag_btn)
         
         tags_layout.addLayout(create_tag_layout)
@@ -237,37 +150,17 @@ class TaskCreatorWidget(QWidget):
         # Дедлайн
         right_layout.addWidget(QLabel("Дедлайн:"))
         self.deadline_edit = QDateEdit()
+        self.deadline_edit.setObjectName("deadlineEdit")
         self.deadline_edit.setCalendarPopup(True)
         self.deadline_edit.setMinimumDate(QDate.currentDate())
         self.deadline_edit.setDate(QDate.currentDate().addDays(7))
-        self.deadline_edit.setMinimumHeight(40)
-        self.deadline_edit.setStyleSheet("""
-            QDateEdit {
-                padding: 8px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-            QDateEdit:focus {
-                border: 2px solid #0078d4;
-            }
-        """)
         right_layout.addWidget(self.deadline_edit)
         
         # Критичность
         right_layout.addWidget(QLabel("Уровень критичности:"))
         self.priority_combo = QComboBox()
+        self.priority_combo.setObjectName("priorityCombo")
         self.priority_combo.addItems(["Низкий", "Средний", "Критичный", "Блокер"])
-        self.priority_combo.setMinimumHeight(40)
-        self.priority_combo.setStyleSheet("""
-            QComboBox {
-                padding: 8px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-            QComboBox:focus {
-                border: 2px solid #0078d4;
-            }
-        """)
         right_layout.addWidget(self.priority_combo)
         
         right_layout.addStretch()
@@ -284,40 +177,13 @@ class TaskCreatorWidget(QWidget):
         buttons_layout.addStretch()
         
         cancel_btn = QPushButton("Отмена")
+        cancel_btn.setObjectName("cancelButton")
         cancel_btn.clicked.connect(self.cancel_creation)
-        cancel_btn.setMinimumHeight(45)
-        cancel_btn.setMinimumWidth(120)
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e0e0e0;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 14px;
-                color: #333333;
-            }
-            QPushButton:hover {
-                background-color: #d0d0d0;
-            }
-        """)
         buttons_layout.addWidget(cancel_btn)
         
         create_btn = QPushButton("Создать задачу")
+        create_btn.setObjectName("createTaskMainButton")
         create_btn.clicked.connect(self.create_task)
-        create_btn.setMinimumHeight(45)
-        create_btn.setMinimumWidth(150)
-        create_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #0063b1;
-            }
-        """)
         buttons_layout.addWidget(create_btn)
         
         main_layout.addLayout(buttons_layout)
@@ -468,29 +334,13 @@ class TasksWidget(QWidget):
         # Заголовок и кнопка создания
         header_layout = QHBoxLayout()
         title_label = QLabel("Все задачи")
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
+        title_label.setObjectName("tasksTitleLabel")
         header_layout.addWidget(title_label)
         
         header_layout.addStretch()
         
         create_btn = QPushButton("➕ Создать задачу")
         create_btn.setObjectName("createTaskButton")
-        create_btn.setMinimumHeight(40)
-        create_btn.setMinimumWidth(150)
-        create_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 10px 20px;
-            }
-            QPushButton:hover {
-                background-color: #0063b1;
-            }
-        """)
         create_btn.clicked.connect(self.show_creator)
         header_layout.addWidget(create_btn)
         
@@ -498,13 +348,9 @@ class TasksWidget(QWidget):
         
         # Список задач
         self.tasks_scroll = QScrollArea()
+        self.tasks_scroll.setObjectName("tasksScrollArea")
         self.tasks_scroll.setWidgetResizable(True)
         self.tasks_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tasks_scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-            }
-        """)
         
         self.tasks_container = QWidget()
         self.tasks_layout = QVBoxLayout(self.tasks_container)
@@ -542,8 +388,8 @@ class TasksWidget(QWidget):
         
         if not tasks:
             empty_label = QLabel("Нет задач")
+            empty_label.setObjectName("emptyTasksLabel")
             empty_label.setAlignment(Qt.AlignCenter)
-            empty_label.setStyleSheet("font-size: 18px; color: #999; padding: 50px;")
             self.tasks_layout.insertWidget(0, empty_label)
             return
         
@@ -555,18 +401,6 @@ class TasksWidget(QWidget):
         """Создать карточку задачи."""
         card = QFrame()
         card.setObjectName("taskCard")
-        card.setStyleSheet("""
-            QFrame#taskCard {
-                background-color: #2d2d2d;
-                border: 1px solid #404040;
-                border-radius: 8px;
-                padding: 15px;
-            }
-            QFrame#taskCard:hover {
-                border: 1px solid #0078d4;
-                background-color: #383838;
-            }
-        """)
         
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
@@ -575,29 +409,21 @@ class TasksWidget(QWidget):
         header_layout = QHBoxLayout()
         
         title_label = QLabel(task_data['title'])
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        title_label.setObjectName("taskTitleLabel")
         header_layout.addWidget(title_label)
         
         # Приоритет
-        priority_colors = {
-            "Низкий": "#4caf50",
-            "Средний": "#ff9800",
-            "Критичный": "#f44336",
-            "Блокер": "#9c27b0"
+        priority_class_map = {
+            "Низкий": "priorityLow",
+            "Средний": "priorityMedium",
+            "Критичный": "priorityCritical",
+            "Блокер": "priorityBlocker"
         }
-        priority_color = priority_colors.get(task_data['priority'], "#808080")
+        priority_class = priority_class_map.get(task_data['priority'], "")
         
         priority_label = QLabel(task_data['priority'])
-        priority_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {priority_color};
-                color: white;
-                padding: 4px 12px;
-                border-radius: 12px;
-                font-size: 12px;
-                font-weight: bold;
-            }}
-        """)
+        if priority_class:
+            priority_label.setObjectName(priority_class)
         header_layout.addWidget(priority_label)
         
         layout.addLayout(header_layout)
@@ -608,7 +434,7 @@ class TasksWidget(QWidget):
             desc = desc[:150] + "..."
         
         desc_label = QLabel(desc)
-        desc_label.setStyleSheet("color: #cccccc; font-size: 14px;")
+        desc_label.setObjectName("taskDescriptionLabel")
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
         
@@ -616,18 +442,18 @@ class TasksWidget(QWidget):
         info_layout = QHBoxLayout()
         
         executor_label = QLabel(f"👤 {task_data['executor_name']}")
-        executor_label.setStyleSheet("color: #aaaaaa; font-size: 13px;")
+        executor_label.setObjectName("executorInfoLabel")
         info_layout.addWidget(executor_label)
         
         if task_data['deadline']:
             deadline_label = QLabel(f"📅 {task_data['deadline']}")
-            deadline_label.setStyleSheet("color: #aaaaaa; font-size: 13px;")
+            deadline_label.setObjectName("deadlineInfoLabel")
             info_layout.addWidget(deadline_label)
         
         info_layout.addStretch()
         
         author_label = QLabel(f"Автор: {task_data['author_name']}")
-        author_label.setStyleSheet("color: #888888; font-size: 12px;")
+        author_label.setObjectName("authorInfoLabel")
         info_layout.addWidget(author_label)
         
         layout.addLayout(info_layout)
