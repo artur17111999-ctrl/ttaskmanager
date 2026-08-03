@@ -39,8 +39,11 @@ class ScreenshotPreview(QWidget):
         self.editor = editor
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        self.setObjectName("screenshotPreview")
         self.label = QLabel()
-        self.remove_button = QPushButton("Clear screenshots")
+        self.label.setObjectName("screenshotPreviewLabel")
+        self.remove_button = QPushButton("Очистить")
+        self.remove_button.setObjectName("clearScreenshotsButton")
         self.remove_button.clicked.connect(editor.clear_screenshots)
         layout.addWidget(self.label)
         layout.addWidget(self.remove_button)
@@ -51,15 +54,21 @@ class ScreenshotPreview(QWidget):
     def refresh(self):
         count = len(self.editor.screenshots)
         self.label.setText(
-            f"Screenshots attached: {count}" if count else "Paste a screenshot with Ctrl+V"
+            f"Прикреплено скриншотов: {count}"
+            if count else "Вставьте скриншот: Ctrl+V"
         )
         self.remove_button.setVisible(bool(count))
 
 
 def add_image_previews(layout, images, max_width=320):
+    """Add thumbnails that preserve their aspect ratio and never enlarge an image."""
     for data in images:
         pixmap = QPixmap()
         if pixmap.loadFromData(data):
             label = QLabel()
-            label.setPixmap(pixmap.scaledToWidth(max_width, Qt.SmoothTransformation))
+            label.setObjectName("screenshotAttachment")
+            if pixmap.width() > max_width:
+                pixmap = pixmap.scaledToWidth(max_width, Qt.SmoothTransformation)
+            label.setPixmap(pixmap)
+            label.setAlignment(Qt.AlignLeft)
             layout.addWidget(label)

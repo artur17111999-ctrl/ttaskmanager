@@ -76,3 +76,10 @@ QLineEdit#editInput {
 QFrame#bubbleFrame QLabel {
     background-color: transparent;
 }
+
+QLabel#screenshotAttachment {
+    background-color: #17212b;
+    border: 1px solid #3a4658;
+    border-radius: 8px;
+    padding: 4px;
+}

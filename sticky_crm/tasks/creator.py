@@ -78,7 +78,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         left_layout.addWidget(self.description_edit)
         left_layout.addWidget(ScreenshotPreview(self.description_edit))
         
-        files_label = QLabel("📎 Файлы будут доступны позже")
+        files_label = QLabel("📎 Скриншоты можно вставить из буфера обмена (Ctrl+V)")
         files_label.setObjectName("filesLabel")
         files_label.setStyleSheet("color: #888; font-style: italic;")
         left_layout.addWidget(files_label)

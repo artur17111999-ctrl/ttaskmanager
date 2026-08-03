@@ -236,3 +236,32 @@ QLabel#commentTextLabel {
     font-size: 14px;
     background-color: transparent;
 }
+
+QWidget#screenshotPreview {
+    background-color: transparent;
+}
+
+QLabel#screenshotPreviewLabel, QLabel#attachmentSectionLabel {
+    color: #9fb0c5;
+    font-size: 12px;
+    background-color: transparent;
+}
+
+QPushButton#clearScreenshotsButton {
+    background-color: transparent;
+    color: #65b8ff;
+    border: none;
+    padding: 3px 7px;
+}
+
+QPushButton#clearScreenshotsButton:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+QLabel#screenshotAttachment {
+    background-color: #18222d;
+    border: 1px solid #3a4658;
+    border-radius: 8px;
+    padding: 4px;
+}

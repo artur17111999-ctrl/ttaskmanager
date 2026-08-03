@@ -76,6 +76,14 @@ class TaskDetailView(QWidget):
         self.desc_text.setMinimumHeight(150)
         self.desc_text.setTextInteractionFlags(Qt.TextEditorInteraction)
         desc_layout.addWidget(self.desc_text)
+        self.task_images_widget = QWidget()
+        self.task_images_layout = QVBoxLayout(self.task_images_widget)
+        self.task_images_layout.setContentsMargins(0, 8, 0, 0)
+        self.task_images_layout.setSpacing(6)
+        self.task_images_label = QLabel("Прикреплённые скриншоты")
+        self.task_images_label.setObjectName("attachmentSectionLabel")
+        self.task_images_layout.addWidget(self.task_images_label)
+        desc_layout.addWidget(self.task_images_widget)
         content_layout.addWidget(desc_group)
         
         info_group = QGroupBox("Информация")
@@ -233,10 +241,29 @@ class TaskDetailView(QWidget):
         )
         
         self.load_tags()
+        self.load_task_images()
         self.load_comments()
         
         is_author = self.task_data.get('author_id') == self.current_user_id
         self.delete_btn.setVisible(is_author)
+
+    def load_task_images(self):
+        """Show screenshots pasted when the task was created."""
+        from db import get_image_attachments
+
+        while self.task_images_layout.count() > 1:
+            layout_item = self.task_images_layout.takeAt(1)
+            widget = layout_item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        try:
+            images = get_image_attachments('task', self.task_id)
+        except Exception as error:
+            print(f"Не удалось загрузить скриншоты задачи: {error}")
+            images = []
+        self.task_images_widget.setVisible(bool(images))
+        if images:
+            add_image_previews(self.task_images_layout, images)
 
     def go_back(self):
         """Return to the task list."""
