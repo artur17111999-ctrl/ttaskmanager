@@ -1079,17 +1079,27 @@ class TaskDetailView(QWidget):
         self.author_label_val = QLabel("")
         info_layout.addRow("Автор:", self.author_label_val)
         
-        self.executor_label_val = QLabel("")
-        info_layout.addRow("Исполнитель:", self.executor_label_val)
+        # Исполнитель - редактируемый combobox
+        self.executor_combo = QComboBox()
+        self.executor_combo.setObjectName("executorCombo")
+        info_layout.addRow("Исполнитель:", self.executor_combo)
         
-        self.status_label_val = QLabel("")
-        info_layout.addRow("Статус:", self.status_label_val)
+        # Статус - редактируемый combobox
+        self.status_combo = QComboBox()
+        self.status_combo.setObjectName("statusCombo")
+        info_layout.addRow("Статус:", self.status_combo)
         
-        self.priority_label_val = QLabel("")
-        info_layout.addRow("Приоритет:", self.priority_label_val)
+        # Приоритет - редактируемый combobox
+        self.priority_combo = QComboBox()
+        self.priority_combo.setObjectName("priorityCombo")
+        info_layout.addRow("Приоритет:", self.priority_combo)
         
-        self.deadline_label_val = QLabel("")
-        info_layout.addRow("Дедлайн:", self.deadline_label_val)
+        # Дедлайн - редактируемый QDateEdit
+        self.deadline_edit = QDateEdit()
+        self.deadline_edit.setObjectName("deadlineEdit")
+        self.deadline_edit.setCalendarPopup(True)
+        self.deadline_edit.setMinimumDate(QDate.currentDate().addDays(-365))  # Разрешаем прошлые даты
+        info_layout.addRow("Дедлайн:", self.deadline_edit)
         
         self.created_at_label_val = QLabel("")
         info_layout.addRow("Создана:", self.created_at_label_val)
@@ -1104,12 +1114,30 @@ class TaskDetailView(QWidget):
         observers_layout.addWidget(self.observers_list)
         content_layout.addWidget(self.observers_group)
         
-        # Теги
+        # Теги - редактируемый список
         self.tags_group = QGroupBox("Теги")
         tags_layout = QVBoxLayout(self.tags_group)
+        
         self.tags_list = QListWidget()
+        self.tags_list.setSelectionMode(QListWidget.MultiSelection)
         self.tags_list.setMaximumHeight(100)
         tags_layout.addWidget(self.tags_list)
+        
+        # Кнопки управления тегами
+        tags_buttons_layout = QHBoxLayout()
+        
+        self.new_tag_edit = QLineEdit()
+        self.new_tag_edit.setObjectName("newTagEdit")
+        self.new_tag_edit.setPlaceholderText("Новый тег")
+        tags_buttons_layout.addWidget(self.new_tag_edit)
+        
+        create_tag_btn = QPushButton("➕")
+        create_tag_btn.setObjectName("createTagButton")
+        create_tag_btn.setMaximumWidth(40)
+        create_tag_btn.clicked.connect(self.create_new_tag)
+        tags_buttons_layout.addWidget(create_tag_btn)
+        
+        tags_layout.addLayout(tags_buttons_layout)
         content_layout.addWidget(self.tags_group)
         
         # Поле нового комментария (сразу после описания и информации)
@@ -1234,17 +1262,31 @@ class TaskDetailView(QWidget):
         self.desc_text.setPlainText(self.task_data.get('description', 'N/A'))
         
         self.author_label_val.setText(self.task_data.get('author_name', 'N/A'))
-        self.executor_label_val.setText(self.task_data.get('executor_name', 'N/A'))
-        self.status_label_val.setText(self.task_data.get('status', 'N/A'))
-        self.priority_label_val.setText(self.task_data.get('priority', 'N/A'))
         
+        # Загружаем данные в редактируемые поля
+        self.load_employees()
+        self.load_statuses()
+        self.load_priorities()
+        
+        # Устанавливаем текущий дедлайн
         deadline_val = self.task_data.get('deadline')
-        deadline_str = str(deadline_val) if deadline_val else 'Не установлен'
-        self.deadline_label_val.setText(deadline_str)
+        if deadline_val:
+            try:
+                from datetime import datetime
+                if isinstance(deadline_val, str):
+                    deadline_date = QDate.fromString(deadline_val, "yyyy-MM-dd")
+                else:
+                    deadline_date = QDate(deadline_val.year, deadline_val.month, deadline_val.day)
+                self.deadline_edit.setDate(deadline_date)
+            except:
+                self.deadline_edit.setDate(QDate.currentDate())
+        else:
+            self.deadline_edit.setDate(QDate.currentDate())
         
-        created_at_val = self.task_data.get('created_at')
-        created_at_str = str(created_at_val)[:19] if created_at_val else 'N/A'
-        self.created_at_label_val.setText(created_at_str)
+        self.created_at_label_val.setText(
+            str(self.task_data.get('created_at', 'N/A'))[:19] 
+            if self.task_data.get('created_at') else 'N/A'
+        )
         
         # Наблюдатели
         self.observers_list.clear()
@@ -1258,19 +1300,8 @@ class TaskDetailView(QWidget):
             item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
             self.observers_list.addItem(item)
         
-        # Теги
-        self.tags_list.clear()
-        tags = self.task_data.get('tags', [])
-        if tags:
-            for tag in tags:
-                item = QListWidgetItem(tag['name'])
-                if tag.get('color'):
-                    item.setForeground(QColor(tag['color']))
-                self.tags_list.addItem(item)
-        else:
-            item = QListWidgetItem("Нет тегов")
-            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
-            self.tags_list.addItem(item)
+        # Теги - загружаем и выбираем текущие
+        self.load_tags()
         
         # Комментарии
         self.load_comments()
@@ -1418,12 +1449,35 @@ class TaskDetailView(QWidget):
             )
             return
         
+        # Получаем ID исполнителя
+        executor_id = self.executor_combo.currentData()
+        if not executor_id:
+            QMessageBox.warning(self, "Ошибка", "Выберите исполнителя")
+            return
+        
+        # Получаем ID статуса и приоритета
+        status_id = self.status_combo.currentData()
+        priority_id = self.priority_combo.currentData()
+        
+        # Получаем дедлайн
+        deadline = self.deadline_edit.date().toString("yyyy-MM-dd")
+        
+        # Получаем теги
+        selected_tag_ids = []
+        for item in self.tags_list.selectedItems():
+            selected_tag_ids.append(item.data(TAG_ID_ROLE))
+        
         try:
             from db import update_task as db_update_task
             success = db_update_task(
                 task_id=self.task_id,
                 title=title,
-                description=description
+                description=description,
+                executor_id=executor_id,
+                status_id=status_id,
+                priority_id=priority_id,
+                deadline=deadline,
+                tag_ids=selected_tag_ids
             )
         except Exception as e:
             QMessageBox.critical(
@@ -1439,6 +1493,133 @@ class TaskDetailView(QWidget):
             self.load_task_data()
         else:
             QMessageBox.critical(self, "Ошибка", "Не удалось обновить задачу")
+    
+    def load_employees(self):
+        """Загрузить список сотрудников."""
+        try:
+            employees = db_get_all_employees_for_selector()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить сотрудников:\n{e}"
+            )
+            return
+        
+        current_executor_name = self.task_data.get('executor_name', '')
+        self.executor_combo.clear()
+        
+        for i, emp in enumerate(employees):
+            self.executor_combo.addItem(emp['name'], emp['id'])
+            if emp['name'] == current_executor_name:
+                self.executor_combo.setCurrentIndex(i)
+    
+    def load_statuses(self):
+        """Загрузить список статусов."""
+        try:
+            statuses = db_get_all_statuses()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить статусы:\n{e}"
+            )
+            return
+        
+        current_status = self.task_data.get('status', '')
+        current_status_code = self.task_data.get('status_code', '')
+        self.status_combo.clear()
+        
+        for i, status in enumerate(statuses):
+            # status: (id, code, title, color, sort_order)
+            self.status_combo.addItem(status[2], status[0])  # title, id
+            # Выбираем текущий статус
+            if status[1] == current_status_code or status[2] == current_status:
+                self.status_combo.setCurrentIndex(i)
+    
+    def load_priorities(self):
+        """Загрузить список приоритетов."""
+        try:
+            priorities = db_get_all_priorities()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить приоритеты:\n{e}"
+            )
+            return
+        
+        current_priority = self.task_data.get('priority', '')
+        current_priority_code = self.task_data.get('priority_code', '')
+        self.priority_combo.clear()
+        
+        for i, priority in enumerate(priorities):
+            # priority: (id, code, title, color, sort_order)
+            self.priority_combo.addItem(priority[2], priority[0])  # title, id
+            # Выбираем текущий приоритет
+            if priority[1] == current_priority_code or priority[2] == current_priority:
+                self.priority_combo.setCurrentIndex(i)
+    
+    def load_tags(self):
+        """Загрузить существующие теги."""
+        try:
+            tags = db_get_all_tags()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить теги:\n{e}"
+            )
+            return
+        
+        self.tags_list.clear()
+        
+        current_tags = [tag['name'] for tag in self.task_data.get('tags', [])]
+        
+        for tag in tags:
+            item = QListWidgetItem(f"{tag[1]}")
+            item.setData(TAG_ID_ROLE, tag[0])
+            item.setData(TAG_COLOR_ROLE, tag[2])  # цвет
+            
+            # Применяем цвет тега
+            if tag[2]:
+                item.setForeground(QColor(tag[2]))
+            
+            # Выбираем текущие теги
+            if tag[1] in current_tags:
+                item.setSelected(True)
+            
+            self.tags_list.addItem(item)
+    
+    def create_new_tag(self):
+        """Создать новый тег."""
+        tag_name = self.new_tag_edit.text().strip()
+        if not tag_name:
+            QMessageBox.warning(self, "Ошибка", "Введите название тега")
+            return
+        
+        try:
+            tag_id = db_create_tag(tag_name)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось создать тег:\n{e}"
+            )
+            return
+        
+        if tag_id:
+            item = QListWidgetItem(tag_name)
+            item.setData(TAG_ID_ROLE, tag_id)
+            # Сохраняем цвет (по умолчанию серый)
+            item.setData(TAG_COLOR_ROLE, "#808080")
+            item.setForeground(QColor("#808080"))
+            self.tags_list.addItem(item)
+            self.new_tag_edit.clear()
+            # Сразу выбираем новый тег
+            item.setSelected(True)
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось создать тег")
     
     def confirm_delete(self):
         """Подтверждение удаления задачи."""
