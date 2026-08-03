@@ -676,6 +676,12 @@ def delete_message(message_id):
         return False
     try:
         cursor = conn.cursor()
+        # Сначала удаляем связанные уведомления
+        cursor.execute("""
+            DELETE FROM notifications
+            WHERE message_id = %s
+        """, (message_id,))
+        # Затем удаляем само сообщение
         cursor.execute("""
             DELETE FROM messages
             WHERE id = %s
