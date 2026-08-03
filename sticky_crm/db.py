@@ -3,6 +3,7 @@
 """
 
 import psycopg2
+from datetime import datetime
 from config import DB_CONFIG
 
 
@@ -891,6 +892,51 @@ def get_new_messages(chat_id, last_id):
     except Exception as e:
         print(f"Ошибка получения новых сообщений: {e}")
         return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def forward_messages(target_chat_id, sender_id, messages_to_forward):
+    """
+    Переслать сообщения в другой чат.
+    messages_to_forward - список словарей с ключами: id, text, sender_name, time
+    Возвращает True при успехе.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        
+        # Получаем информацию о текущем пользователе для отображения
+        cursor.execute("SELECT last_name, first_name FROM employees WHERE id = %s", (sender_id,))
+        user_info = cursor.fetchone()
+        forwarder_name = f"{user_info[0]} {user_info[1]}" if user_info else "Неизвестно"
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        for msg in messages_to_forward:
+            # Формируем текст пересланного сообщения
+            original_sender = msg.get('sender_name', 'Неизвестно')
+            original_time = msg.get('time', '')
+            original_text = msg.get('text', '')
+            
+            # Текст пересланного сообщения с информацией об оригинале
+            forwarded_text = f"----------\nПереслано от {original_sender} ({original_time})\n{original_text}"
+            
+            # Вставляем сообщение в целевой чат
+            cursor.execute(
+                "INSERT INTO messages (chat_id, sender_id, message_text, is_forwarded, forwarded_from, forwarded_at) VALUES (%s, %s, %s, TRUE, %s, %s)",
+                (target_chat_id, sender_id, forwarded_text, original_sender, current_time)
+            )
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка пересылки сообщений: {e}")
+        return False
     finally:
         cursor.close()
         conn.close()

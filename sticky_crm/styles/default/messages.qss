@@ -12,6 +12,18 @@ QFrame#bubbleFrame[isOwn="true"] {
 }
 
 
+/* Выделенное сообщение (зеленоватый оттенок) */
+QFrame#messageBubble[selected="true"] {
+    background-color: rgba(46, 204, 113, 0.3);
+    border: 2px solid #2ecc71;
+    border-radius: 16px;
+}
+
+QFrame#messageBubble[selected="true"] QFrame#bubbleFrame {
+    background-color: rgba(46, 204, 113, 0.2);
+}
+
+
 /* Текст сообщения */
 QLabel#messageText {
     color: white;

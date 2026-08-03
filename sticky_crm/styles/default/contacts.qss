@@ -69,3 +69,47 @@
     padding: 6px 10px;
     /* остальные стили */
 }
+
+/* Стили для панели заголовка чата */
+#chatHeaderPanel {
+    background: #171d27;
+    border-bottom: 1px solid #313a49;
+}
+
+#chatHeader {
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#deleteSelectedBtn {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+
+#deleteSelectedBtn:hover {
+    background-color: #c0392b;
+}
+
+#forwardSelectedBtn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+
+#forwardSelectedBtn:hover {
+    background-color: #2980b9;
+}
+
+#selectedCountLabel {
+    color: #2ecc71;
+    font-size: 12px;
+    font-weight: bold;
+}

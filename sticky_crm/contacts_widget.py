@@ -119,12 +119,86 @@ class GroupChatDialog(QDialog):
         return [item.data(Qt.UserRole) for item in self.list_widget.selectedItems()]
 
 
+# ------------------- Диалог выбора чата для пересылки -------------------
+class ForwardChatDialog(QDialog):
+    def __init__(self, user_id, parent=None):
+        super().__init__(parent)
+        self.user_id = user_id
+        self.selected_chat_id = None
+        self.setWindowTitle("Переслать сообщения")
+        self.resize(350, 400)
+
+        layout = QVBoxLayout(self)
+        
+        title_label = QLabel("Выберите чат для пересылки:")
+        layout.addWidget(title_label)
+
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Поиск чатов...")
+        layout.addWidget(self.search_edit)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        layout.addWidget(self.list_widget)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.load_chats()
+        self.search_edit.textChanged.connect(self.filter_chats)
+        self.list_widget.itemDoubleClicked.connect(lambda: self.accept())
+
+    def load_chats(self):
+        from db import get_contacts_and_groups, get_personal_chats
+        contacts = get_contacts_and_groups(self.user_id)
+        personal_chats = get_personal_chats(self.user_id)
+        
+        self.list_widget.clear()
+        for c in contacts:
+            if c['type'] == 'self':
+                chat_id = c.get('chat_id')
+                if chat_id:
+                    item = QListWidgetItem(f"⭐ {c['name']}")
+                    item.setData(Qt.UserRole, chat_id)
+                    self.list_widget.addItem(item)
+            elif c['type'] == 'employee':
+                chat_id = personal_chats.get(c['id'])
+                if chat_id:
+                    item = QListWidgetItem(f"👤 {c['name']}")
+                    item.setData(Qt.UserRole, chat_id)
+                    self.list_widget.addItem(item)
+            elif c['type'] == 'group':
+                chat_id = c.get('chat_id')
+                if chat_id:
+                    item = QListWidgetItem(f"👥 {c['name']}")
+                    item.setData(Qt.UserRole, chat_id)
+                    self.list_widget.addItem(item)
+
+    def filter_chats(self, text):
+        search = text.strip().lower()
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            hidden = search not in item.text().lower()
+            item.setHidden(hidden)
+            if hidden and item.isSelected():
+                item.setSelected(False)
+
+    def get_selected_chat_id(self):
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            return current_item.data(Qt.UserRole)
+        return None
+
+
 # ------------------- Пузырёк сообщения -------------------
 class MessageBubble(QFrame):
     editRequested = Signal(int, str)
     saveEditRequested = Signal(int, str)
     deleteRequested = Signal(int)
     editFinished = Signal()
+    selectionChanged = Signal(bool)  # Сигнал об изменении состояния выделения
 
     def __init__(self, msg_data, is_own, parent=None):
         super().__init__(parent)
@@ -132,6 +206,7 @@ class MessageBubble(QFrame):
         self.msg_data = msg_data
         self.is_own = is_own
         self.message_id = msg_data["id"]
+        self.is_selected = False  # Состояние выделения
 
         self.setObjectName("messageBubble")
         self.setProperty("isOwn", "true" if is_own else "false")
@@ -235,7 +310,12 @@ class MessageBubble(QFrame):
         self.status_icon.style().polish(self.status_icon)
 
     def show_context_menu(self, position):
+        # Показываем контекстное меню только если клик был непосредственно на облаке сообщения
         if not self.is_own:
+            return
+        # Проверяем, что клик был именно на bubble (облаке сообщения)
+        pos_in_bubble = self.bubble.mapFromGlobal(self.mapToGlobal(position))
+        if not self.bubble.rect().contains(pos_in_bubble):
             return
         menu = QMenu(self)
         edit_action = QAction("Редактировать", self)
@@ -249,6 +329,36 @@ class MessageBubble(QFrame):
         menu.addAction(edit_action)
         menu.addAction(delete_action)
         menu.exec(self.mapToGlobal(position))
+
+    def mousePressEvent(self, event):
+        # Обработка правой кнопки мыши для вызова контекстного меню
+        if event.button() == Qt.RightButton:
+            # Проверяем, был ли клик непосредственно на облаке сообщения
+            pos_in_bubble = self.bubble.mapFromGlobal(event.globalPosition().toPoint())
+            if self.bubble.rect().contains(pos_in_bubble):
+                # Клик на облаке - показываем контекстное меню
+                self.show_context_menu(event.pos())
+            else:
+                # Клик левее облака - переключаем режим выделения
+                self.toggle_selection()
+        elif event.button() == Qt.LeftButton:
+            # Левая кнопка - выделяем сообщение (в режиме выделения)
+            parent_widget = self.parent()
+            while parent_widget:
+                if isinstance(parent_widget, ChatMessagesArea):
+                    if hasattr(parent_widget, 'selection_mode') and parent_widget.selection_mode:
+                        self.toggle_selection()
+                    break
+                parent_widget = parent_widget.parent()
+        super().mousePressEvent(event)
+
+    def toggle_selection(self):
+        """Переключить состояние выделения сообщения."""
+        self.is_selected = not self.is_selected
+        self.setProperty("selected", "true" if self.is_selected else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.selectionChanged.emit(self.is_selected)
 
     def enter_edit_mode(self, current_text):
         self.edit_input = QLineEdit(current_text)
@@ -292,6 +402,8 @@ class ChatMessagesArea(QScrollArea):
         self.setWidgetResizable(True)
         self.setObjectName("messageArea")
         self.setStyleSheet("")
+        self.selection_mode = False  # Режим выделения сообщений
+        self.selected_messages = set()  # IDs выделенных сообщений
 
         container = QWidget()
         container.setObjectName("scrollContainer")
@@ -302,13 +414,40 @@ class ChatMessagesArea(QScrollArea):
         self.setWidget(container)
 
     def clear_messages(self):
+        self.selected_messages.clear()
         while self.messages_layout.count():
             child = self.messages_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
     def add_message(self, msg_widget):
+        # Подключаем сигнал изменения выделения
+        if hasattr(msg_widget, 'selectionChanged'):
+            msg_widget.selectionChanged.connect(lambda is_selected, mid=msg_widget.message_id: 
+                                                self.on_message_selection_changed(mid, is_selected))
         self.messages_layout.addWidget(msg_widget)
+
+    def on_message_selection_changed(self, message_id, is_selected):
+        """Обработка изменения выделения сообщения."""
+        if is_selected:
+            self.selected_messages.add(message_id)
+        else:
+            self.selected_messages.discard(message_id)
+        
+        # Сообщаем родительскому виджету об изменении выделения
+        parent = self.parent()
+        if parent and hasattr(parent, 'on_selection_changed'):
+            parent.on_selection_changed(len(self.selected_messages))
+
+    def clear_selection(self):
+        """Снять выделение со всех сообщений."""
+        self.selected_messages.clear()
+        for i in range(self.messages_layout.count()):
+            item = self.messages_layout.itemAt(i)
+            if item and item.widget() and isinstance(item.widget(), MessageBubble):
+                bubble = item.widget()
+                if bubble.is_selected:
+                    bubble.toggle_selection()
 
 
 # ------------------- Основной виджет контактов и чата -------------------
@@ -377,9 +516,38 @@ class ContactsWidget(QWidget):
         chat_layout.setContentsMargins(0, 0, 0, 0)
         chat_layout.setSpacing(0)
 
+        # Верхняя панель чата с заголовком и кнопками действий
+        self.chat_header_panel = QFrame()
+        self.chat_header_panel.setObjectName("chatHeaderPanel")
+        header_layout = QHBoxLayout(self.chat_header_panel)
+        header_layout.setContentsMargins(10, 8, 10, 8)
+        
         self.chat_header = QLabel("Выберите чат")
         self.chat_header.setObjectName("chatHeader")
-        chat_layout.addWidget(self.chat_header)
+        header_layout.addWidget(self.chat_header)
+        
+        header_layout.addStretch()
+        
+        # Кнопки действий для выделенных сообщений
+        self.delete_selected_btn = QPushButton("🗑 Удалить выделенные")
+        self.delete_selected_btn.setObjectName("deleteSelectedBtn")
+        self.delete_selected_btn.setVisible(False)
+        self.delete_selected_btn.clicked.connect(self.delete_selected_messages)
+        header_layout.addWidget(self.delete_selected_btn)
+        
+        self.forward_selected_btn = QPushButton("✉ Переслать выделенные")
+        self.forward_selected_btn.setObjectName("forwardSelectedBtn")
+        self.forward_selected_btn.setVisible(False)
+        self.forward_selected_btn.clicked.connect(self.forward_selected_messages)
+        header_layout.addWidget(self.forward_selected_btn)
+        
+        # Метка количества выделенных сообщений
+        self.selected_count_label = QLabel("")
+        self.selected_count_label.setObjectName("selectedCountLabel")
+        self.selected_count_label.setVisible(False)
+        header_layout.addWidget(self.selected_count_label)
+        
+        chat_layout.addWidget(self.chat_header_panel)
 
         # Делаем контейнер для кэшированных областей
         self.chat_stack = QStackedWidget()
@@ -525,6 +693,10 @@ class ContactsWidget(QWidget):
         self.current_chat_type = chat_type
         self.chat_header.setText(name)
         self.send_btn.setEnabled(True)
+        
+        # Скрываем кнопки действий и сбрасываем выделение при переключении чата
+        self.hide_action_buttons()
+        self._clear_all_selections()
 
         # Получаем или создаём область
         area = self._get_chat_area(chat_id)
@@ -545,6 +717,29 @@ class ContactsWidget(QWidget):
         self._load_messages_into_area(area, chat_id)
         self.chat_stack.setCurrentWidget(area)
         self.highlight_current_chat()
+
+    def _clear_all_selections(self):
+        """Снять выделение со всех сообщений в текущем чате."""
+        area = self.chat_stack.currentWidget()
+        if area and hasattr(area, 'clear_selection'):
+            area.clear_selection()
+
+    def hide_action_buttons(self):
+        """Скрыть кнопки действий для выделенных сообщений."""
+        self.delete_selected_btn.setVisible(False)
+        self.forward_selected_btn.setVisible(False)
+        self.selected_count_label.setVisible(False)
+        self.selected_count_label.setText("")
+
+    def on_selection_changed(self, count):
+        """Обработка изменения количества выделенных сообщений."""
+        if count > 0:
+            self.delete_selected_btn.setVisible(True)
+            self.forward_selected_btn.setVisible(True)
+            self.selected_count_label.setVisible(True)
+            self.selected_count_label.setText(f"Выделено: {count}")
+        else:
+            self.hide_action_buttons()
 
     def _load_messages_into_area(self, area, chat_id):
         messages = get_chat_messages(chat_id)
@@ -849,4 +1044,68 @@ class ContactsWidget(QWidget):
             if data and ((data['type'] == 'group' and data.get('chat_id') == chat_id) or
                          (data['type'] == 'employee' and data.get('chat_id') == chat_id)):
                 self.contact_list.setCurrentItem(item)
+                return
+
+    def delete_selected_messages(self):
+        """Удалить выделенные сообщения."""
+        area = self.chat_stack.currentWidget()
+        if not area or not hasattr(area, 'selected_messages'):
+            return
+        
+        selected_ids = list(area.selected_messages)
+        if not selected_ids:
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение удаления",
+            f"Вы уверены, что хотите удалить {len(selected_ids)} сообщение(ий)?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            for msg_id in selected_ids:
+                delete_message(msg_id)
+                bubble = self.find_message_bubble(msg_id)
+                if bubble:
+                    area.messages_layout.removeWidget(bubble)
+                    bubble.deleteLater()
+            area.selected_messages.clear()
+            self.hide_action_buttons()
+
+    def forward_selected_messages(self):
+        """Переслать выделенные сообщения в другой чат."""
+        area = self.chat_stack.currentWidget()
+        if not area or not hasattr(area, 'selected_messages'):
+            return
+        
+        selected_ids = list(area.selected_messages)
+        if not selected_ids:
+            return
+        
+        # Открываем диалог выбора чата
+        dialog = ForwardChatDialog(self.current_user_id, self)
+        if dialog.exec() == QDialog.Accepted:
+            target_chat_id = dialog.get_selected_chat_id()
+            if target_chat_id:
+                # Получаем текст сообщений из базы
+                messages_to_forward = []
+                for msg_id in selected_ids:
+                    bubble = self.find_message_bubble(msg_id)
+                    if bubble:
+                        messages_to_forward.append({
+                            'id': msg_id,
+                            'text': bubble.msg_data.get('text', ''),
+                            'sender_name': bubble.msg_data.get('sender_name', ''),
+                            'time': bubble.msg_data.get('time', '')
+                        })
+                
+                # Пересылаем сообщения
+                from db import forward_messages
+                if forward_messages(target_chat_id, self.current_user_id, messages_to_forward):
+                    QMessageBox.information(self, "Успешно", f"Переслано {len(messages_to_forward)} сообщение(ий)")
+                    area.clear_selection()
+                    self.hide_action_buttons()
+                else:
+                    QMessageBox.critical(self, "Ошибка", "Не удалось переслать сообщения")
                 return
