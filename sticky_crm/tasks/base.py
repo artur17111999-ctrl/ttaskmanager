@@ -2,7 +2,7 @@
 Базовый класс и общие утилиты для виджетов задач.
 """
 
-from PySide6.QtWidgets import QWidget, QMessageBox
+from PySide6.QtWidgets import QWidget, QMessageBox, QListWidgetItem
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 
