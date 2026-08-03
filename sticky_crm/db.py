@@ -491,13 +491,18 @@ def get_contacts_and_groups(user_id, search_query=None):
         cursor = conn.cursor()
         results = []
 
-        # Сотрудники (кроме себя? пока оставим всех, включая себя для "Избранного")
+        # Чат "Избранное" (с самим собой)
+        self_chat_id = get_or_create_self_chat(user_id)
+        if self_chat_id:
+            results.append({'type': 'self', 'id': None, 'name': 'Избранное', 'chat_id': self_chat_id})
+
+        # Сотрудники (кроме себя)
         emp_query = """
             SELECT id, last_name, first_name, middle_name
             FROM employees
-            WHERE is_dismissed = FALSE
+            WHERE is_dismissed = FALSE AND id != %s
         """
-        params = []
+        params = [user_id]
         if search_query:
             emp_query += """ AND (
                 LOWER(last_name) LIKE LOWER(%s) OR
@@ -532,7 +537,6 @@ def get_contacts_and_groups(user_id, search_query=None):
             chat_id, name, created_by = row
             results.append({'type': 'group', 'id': chat_id, 'name': name, 'chat_id': chat_id, 'created_by': created_by})
 
-        # Чат "Избранное"
         return results
     except Exception as e:
         print(f"Ошибка получения контактов: {e}")
