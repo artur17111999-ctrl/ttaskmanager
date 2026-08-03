@@ -5,13 +5,6 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Dependencies
-.venv/
-venv/
-env/
-pip-log.txt
-pip-selfcheck.json
-
 # Build artifacts
 build/
 dist/
@@ -20,24 +13,20 @@ dist/
 # Logs
 *.log
 
-# Environment variables
+# Environment
 .env
 .env.local
-*.env*
+*.env.*
 
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# IDE
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
+# Dependencies
+.venv/
+venv/
+pip-log.txt
+pipenv.lock
 ```
