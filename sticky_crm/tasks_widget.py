@@ -15,7 +15,8 @@ from db import (
     get_tasks as db_get_tasks,
     get_task_detail,
     update_task,
-    delete_task
+    delete_task,
+    add_task_comment
 )
 
 # Константы для ролей данных
@@ -945,19 +946,20 @@ class TaskDetailView(QWidget):
         # Название задачи
         title_group = QGroupBox("Название")
         title_layout = QVBoxLayout(title_group)
-        self.title_label = QLabel("")
-        self.title_label.setWordWrap(True)
-        self.title_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        title_layout.addWidget(self.title_label)
+        self.title_edit = QLineEdit()
+        self.title_edit.setObjectName("titleEdit")
+        self.title_edit.setPlaceholderText("Введите название задачи")
+        title_layout.addWidget(self.title_edit)
         content_layout.addWidget(title_group)
         
         # Описание
         desc_group = QGroupBox("Описание")
         desc_layout = QVBoxLayout(desc_group)
         self.desc_text = QTextEdit()
-        self.desc_text.setReadOnly(True)
+        self.desc_text.setObjectName("descriptionEdit")
+        self.desc_text.setPlaceholderText("Введите подробное описание задачи")
         self.desc_text.setMinimumHeight(150)
-        self.desc_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.desc_text.setTextInteractionFlags(Qt.TextEditorInteraction)
         desc_layout.addWidget(self.desc_text)
         content_layout.addWidget(desc_group)
         
@@ -1001,13 +1003,33 @@ class TaskDetailView(QWidget):
         tags_layout.addWidget(self.tags_list)
         content_layout.addWidget(self.tags_group)
         
-        # Комментарии (заглушка)
+        # Комментарии
         comments_group = QGroupBox("Комментарии")
-        comments_layout = QVBoxLayout(comments_group)
-        comments_placeholder = QLabel("Комментарии пока не реализованы")
-        comments_placeholder.setAlignment(Qt.AlignCenter)
-        comments_placeholder.setStyleSheet("color: gray;")
-        comments_layout.addWidget(comments_placeholder)
+        self.comments_layout_inner = QVBoxLayout(comments_group)
+        self.comments_scroll = QScrollArea()
+        self.comments_scroll.setWidgetResizable(True)
+        self.comments_scroll.setMaximumHeight(200)
+        self.comments_container = QWidget()
+        self.comments_container_layout = QVBoxLayout(self.comments_container)
+        self.comments_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.comments_container_layout.setSpacing(5)
+        self.comments_scroll.setWidget(self.comments_container)
+        self.comments_layout_inner.addWidget(self.comments_scroll)
+        
+        # Форма добавления комментария
+        comment_input_layout = QHBoxLayout()
+        self.comment_edit = QTextEdit()
+        self.comment_edit.setObjectName("commentEdit")
+        self.comment_edit.setPlaceholderText("Введите комментарий...")
+        self.comment_edit.setMaximumHeight(60)
+        comment_input_layout.addWidget(self.comment_edit)
+        
+        send_comment_btn = QPushButton("Отправить")
+        send_comment_btn.setObjectName("sendCommentButton")
+        send_comment_btn.clicked.connect(self.send_comment)
+        comment_input_layout.addWidget(send_comment_btn)
+        
+        self.comments_layout_inner.addLayout(comment_input_layout)
         content_layout.addWidget(comments_group)
         
         # Файлы (заглушка)
@@ -1078,7 +1100,7 @@ class TaskDetailView(QWidget):
             return
         
         self.header_label.setText(f"Задача №{self.task_data['id']}")
-        self.title_label.setText(self.task_data.get('title', 'N/A'))
+        self.title_edit.setText(self.task_data.get('title', 'N/A'))
         self.desc_text.setPlainText(self.task_data.get('description', 'N/A'))
         
         self.author_label_val.setText(self.task_data.get('author_name', 'N/A'))
@@ -1120,9 +1142,79 @@ class TaskDetailView(QWidget):
             item.setFlags(item.flags() & ~Qt.ItemIsEnabled)
             self.tags_list.addItem(item)
         
+        # Комментарии
+        self.load_comments()
+        
         # Показываем/скрываем кнопку удаления в зависимости от прав
         is_author = self.task_data.get('author_id') == self.current_user_id
         self.delete_btn.setVisible(is_author)
+    
+    def load_comments(self):
+        """Загрузить и отобразить комментарии."""
+        # Очищаем контейнер комментариев
+        while self.comments_container_layout.count():
+            item = self.comments_container_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        comments = self.task_data.get('comments', [])
+        if comments:
+            for comment in comments:
+                comment_widget = self.create_comment_widget(comment)
+                self.comments_container_layout.addWidget(comment_widget)
+        else:
+            placeholder = QLabel("Комментариев пока нет")
+            placeholder.setAlignment(Qt.AlignCenter)
+            placeholder.setStyleSheet("color: gray; font-style: italic;")
+            self.comments_container_layout.addWidget(placeholder)
+        
+        self.comments_container_layout.addStretch()
+    
+    def create_comment_widget(self, comment):
+        """Создать виджет одного комментария."""
+        frame = QFrame()
+        frame.setObjectName("commentFrame")
+        frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+        
+        # Заголовок: автор и время
+        header_layout = QHBoxLayout()
+        author_label = QLabel(f"<b>{comment['author_name']}</b>")
+        author_label.setStyleSheet("font-size: 13px;")
+        header_layout.addWidget(author_label)
+        
+        time_label = QLabel(comment['created_at'])
+        time_label.setStyleSheet("color: #888; font-size: 11px;")
+        header_layout.addStretch()
+        header_layout.addWidget(time_label)
+        
+        layout.addLayout(header_layout)
+        
+        # Текст комментария
+        text_label = QLabel(comment['text'])
+        text_label.setWordWrap(True)
+        text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(text_label)
+        
+        return frame
+    
+    def send_comment(self):
+        """Отправить комментарий."""
+        comment_text = self.comment_edit.toPlainText().strip()
+        if not comment_text:
+            QMessageBox.warning(self, "Ошибка", "Введите текст комментария")
+            return
+        
+        success = add_task_comment(self.task_id, self.current_user_id, comment_text)
+        if success:
+            self.comment_edit.clear()
+            # Перезагружаем данные задачи и обновляем UI
+            self.load_task_data()
+        else:
+            QMessageBox.critical(self, "Ошибка", "Не удалось добавить комментарий")
     
     def edit_task(self):
         """Открыть диалог редактирования задачи."""
