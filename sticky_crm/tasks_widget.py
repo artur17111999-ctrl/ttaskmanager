@@ -1,20 +1,26 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame, QSplitter, QTextEdit, QLineEdit, QComboBox, QDateEdit,
-    QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QMenu,
-    QToolButton, QSizePolicy, QStackedWidget, QGroupBox, QCheckBox
+    QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QStackedWidget
 )
 from PySide6.QtCore import Qt, QDate, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QColor
 
 from db import (
-    get_all_employees_for_selector,
-    get_all_tags,
-    create_tag,
-    create_task,
-    get_tasks,
+    get_all_employees_for_selector as db_get_all_employees_for_selector,
+    get_all_tags as db_get_all_tags,
+    create_tag as db_create_tag,
+    create_task as db_create_task,
+    get_tasks as db_get_tasks,
     get_task_detail
 )
+
+# Константы для ролей данных
+TAG_COLOR_ROLE = Qt.UserRole + 1
+EMPLOYEE_ID_ROLE = Qt.UserRole
+
+# Ограничение размера файла (20 МБ)
+MAX_FILE_SIZE = 20 * 1024 * 1024
 
 
 class TaskCreatorWidget(QWidget):
@@ -27,7 +33,6 @@ class TaskCreatorWidget(QWidget):
         super().__init__()
         self.current_user_id = current_user_id
         self.current_user_name = current_user_name
-        self.selected_tags = []
         self.attached_files = []
         self.init_ui()
         self.load_employees()
@@ -190,7 +195,16 @@ class TaskCreatorWidget(QWidget):
     
     def load_employees(self):
         """Загрузить список сотрудников."""
-        employees = get_all_employees_for_selector()
+        try:
+            employees = db_get_all_employees_for_selector()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить сотрудников:\n{e}"
+            )
+            return
+        
         self.executor_combo.clear()
         self.observers_list.clear()
         
@@ -198,20 +212,34 @@ class TaskCreatorWidget(QWidget):
             self.executor_combo.addItem(emp['name'], emp['id'])
             
             item = QListWidgetItem(emp['name'])
-            item.setData(Qt.UserRole, emp['id'])
+            item.setData(EMPLOYEE_ID_ROLE, emp['id'])
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Unchecked)
             self.observers_list.addItem(item)
     
     def load_tags(self):
         """Загрузить существующие теги."""
-        tags = get_all_tags()
+        try:
+            tags = db_get_all_tags()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить теги:\n{e}"
+            )
+            return
+        
         self.tags_list.clear()
         
         for tag in tags:
             item = QListWidgetItem(f"{tag[1]}")
-            item.setData(Qt.UserRole, tag[0])
-            item.setData(Qt.UserRole + 1, tag[2])  # цвет
+            item.setData(EMPLOYEE_ID_ROLE, tag[0])
+            item.setData(TAG_COLOR_ROLE, tag[2])  # цвет
+            
+            # Применяем цвет тега
+            if tag[2]:
+                item.setForeground(QColor(tag[2]))
+            
             self.tags_list.addItem(item)
     
     def create_new_tag(self):
@@ -221,10 +249,19 @@ class TaskCreatorWidget(QWidget):
             QMessageBox.warning(self, "Ошибка", "Введите название тега")
             return
         
-        tag_id = create_tag(tag_name)
+        try:
+            tag_id = db_create_tag(tag_name)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось создать тег:\n{e}"
+            )
+            return
+        
         if tag_id:
             item = QListWidgetItem(tag_name)
-            item.setData(Qt.UserRole, tag_id)
+            item.setData(EMPLOYEE_ID_ROLE, tag_id)
             self.tags_list.addItem(item)
             self.new_tag_edit.clear()
         else:
@@ -234,6 +271,17 @@ class TaskCreatorWidget(QWidget):
         """Прикрепить файл к задаче."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл")
         if file_path:
+            # Проверка размера файла
+            import os
+            file_size = os.path.getsize(file_path)
+            if file_size > MAX_FILE_SIZE:
+                QMessageBox.warning(
+                    self,
+                    "Ошибка",
+                    f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // (1024 * 1024)} МБ"
+                )
+                return
+            
             self.attached_files.append(file_path)
             self.files_label.setText(f"Прикреплено файлов: {len(self.attached_files)}")
     
@@ -246,9 +294,36 @@ class TaskCreatorWidget(QWidget):
         
         description = self.description_edit.toPlainText().strip()
         
+        # Валидация описания
+        if len(description) < 10:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Описание слишком короткое (минимум 10 символов)"
+            )
+            return
+        
+        # Проверка наличия исполнителей
+        if self.executor_combo.count() == 0:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Нет доступных исполнителей"
+            )
+            return
+        
         executor_id = self.executor_combo.currentData()
         if not executor_id:
             QMessageBox.warning(self, "Ошибка", "Выберите исполнителя")
+            return
+        
+        # Проверка дедлайна
+        if self.deadline_edit.date() < QDate.currentDate():
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Дедлайн не может быть в прошлом"
+            )
             return
         
         # Получаем наблюдателей
@@ -256,36 +331,65 @@ class TaskCreatorWidget(QWidget):
         for i in range(self.observers_list.count()):
             item = self.observers_list.item(i)
             if item.checkState() == Qt.Checked:
-                observers_ids.append(item.data(Qt.UserRole))
+                observers_ids.append(item.data(EMPLOYEE_ID_ROLE))
         
         # Получаем теги
         selected_tag_ids = []
         for item in self.tags_list.selectedItems():
-            selected_tag_ids.append(item.data(Qt.UserRole))
+            selected_tag_ids.append(item.data(EMPLOYEE_ID_ROLE))
         
         deadline = self.deadline_edit.date().toString("yyyy-MM-dd")
         priority = self.priority_combo.currentText()
         
-        task_id = create_task(
-            title=title,
-            description=description,
-            author_id=self.current_user_id,
-            executor_id=executor_id,
-            observers_ids=observers_ids,
-            deadline=deadline,
-            priority=priority,
-            tag_ids=selected_tag_ids,
-            creator_id=self.current_user_id
-        )
+        try:
+            task_id = db_create_task(
+                title=title,
+                description=description,
+                author_id=self.current_user_id,
+                executor_id=executor_id,
+                observers_ids=observers_ids,
+                deadline=deadline,
+                priority=priority,
+                tag_ids=selected_tag_ids,
+                creator_id=self.current_user_id,
+                attachments=self.attached_files
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось создать задачу:\n{e}"
+            )
+            return
         
         if task_id:
             QMessageBox.information(self, "Успех", "Задача успешно создана")
+            self.attached_files.clear()
+            self.files_label.setText("Прикрепленные файлы: нет")
             self.taskCreated.emit()
         else:
             QMessageBox.critical(self, "Ошибка", "Не удалось создать задачу")
     
     def cancel_creation(self):
         """Отменить создание задачи."""
+        # Проверка, есть ли введенные данные
+        has_data = (
+            self.title_edit.text().strip() or
+            self.description_edit.toPlainText().strip() or
+            self.attached_files
+        )
+        
+        if has_data:
+            reply = QMessageBox.question(
+                self,
+                "Отмена",
+                "Удалить введенные данные?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        
         self.title_edit.clear()
         self.description_edit.clear()
         self.executor_combo.setCurrentIndex(0)
@@ -376,15 +480,29 @@ class TasksWidget(QWidget):
         self.stacked_widget.setCurrentWidget(self.list_page)
         self.load_tasks()
     
+    def clear_layout(self, layout):
+        """Очистить макет от всех виджетов."""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+    
     def load_tasks(self):
         """Загрузить список задач."""
         # Очищаем текущий список
-        while self.tasks_layout.count() > 1:  # 1 - это stretch
-            item = self.tasks_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        self.clear_layout(self.tasks_layout)
+        self.tasks_layout.addStretch()
         
-        tasks = get_tasks(current_user_id=self.current_user_id)
+        try:
+            tasks = db_get_tasks(current_user_id=self.current_user_id)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить задачи:\n{e}"
+            )
+            return
         
         if not tasks:
             empty_label = QLabel("Нет задач")
@@ -401,6 +519,10 @@ class TasksWidget(QWidget):
         """Создать карточку задачи."""
         card = QFrame()
         card.setObjectName("taskCard")
+        
+        # Делаем карточку кликабельной
+        card.mousePressEvent = lambda e: self.open_task(task_data['id'])
+        card.setCursor(Qt.PointingHandCursor)
         
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
@@ -459,6 +581,31 @@ class TasksWidget(QWidget):
         layout.addLayout(info_layout)
         
         return card
+    
+    def open_task(self, task_id):
+        """Открыть детальную информацию о задаче."""
+        try:
+            detail = get_task_detail(task_id)
+            if detail:
+                QMessageBox.information(
+                    self,
+                    f"Задача #{task_id}",
+                    f"Название: {detail.get('title', 'N/A')}\n"
+                    f"Описание: {detail.get('description', 'N/A')}\n"
+                    f"Статус: {detail.get('status', 'N/A')}"
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Ошибка",
+                    "Задача не найдена"
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить задачу:\n{e}"
+            )
     
     def show_creator(self):
         """Показать страницу создания задачи."""
