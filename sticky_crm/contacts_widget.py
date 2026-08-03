@@ -257,6 +257,14 @@ class MessageBubble(QFrame):
         bottom_row.setContentsMargins(0, 0, 0, 0)
         bottom_row.setSpacing(5)
 
+        # Отображение информации о пересланном сообщении
+        if self.msg_data.get("is_forwarded"):
+            forwarded_info = QLabel(f"↪ Переслано от {self.msg_data.get('forwarded_from', '')}")
+            forwarded_info.setObjectName("forwardedLabel")
+            forwarded_info.setFont(QFont("Segoe UI", 7))
+            forwarded_info.setStyleSheet("color: #8fa3b8; font-style: italic;")
+            bubble_layout.addWidget(forwarded_info)
+
         self.time_label = QLabel(self.msg_data["time"])
         self.time_label.setObjectName("timeLabel")
         self.time_label.setFont(QFont("Segoe UI", 8))
@@ -522,13 +530,7 @@ class ContactsWidget(QWidget):
         header_layout = QHBoxLayout(self.chat_header_panel)
         header_layout.setContentsMargins(10, 8, 10, 8)
         
-        self.chat_header = QLabel("Выберите чат")
-        self.chat_header.setObjectName("chatHeader")
-        header_layout.addWidget(self.chat_header)
-        
-        header_layout.addStretch()
-        
-        # Кнопки действий для выделенных сообщений
+        # Кнопки действий для выделенных сообщений (слева от заголовка)
         self.delete_selected_btn = QPushButton("🗑 Удалить выделенные")
         self.delete_selected_btn.setObjectName("deleteSelectedBtn")
         self.delete_selected_btn.setVisible(False)
@@ -546,6 +548,15 @@ class ContactsWidget(QWidget):
         self.selected_count_label.setObjectName("selectedCountLabel")
         self.selected_count_label.setVisible(False)
         header_layout.addWidget(self.selected_count_label)
+        
+        # Разделитель между кнопками и заголовком
+        header_layout.addSpacing(15)
+        
+        self.chat_header = QLabel("Выберите чат")
+        self.chat_header.setObjectName("chatHeader")
+        header_layout.addWidget(self.chat_header)
+        
+        header_layout.addStretch()
         
         chat_layout.addWidget(self.chat_header_panel)
 
