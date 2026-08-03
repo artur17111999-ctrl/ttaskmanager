@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 from datetime import datetime   # для edited_at
 from PySide6.QtCore import Qt, QTimer, Signal, QEvent, QRect, QSize
-from PySide6.QtGui import QFont, QAction, QColor, QPainter, QPen
+from PySide6.QtGui import QFont, QAction, QColor, QPainter, QPen, QCursor
 from db import (
     get_contacts_and_groups, get_or_create_personal_chat,
     create_group_chat_auto, get_chat_messages, send_message,
@@ -215,10 +215,8 @@ class MessageBubble(QFrame):
         self.style().unpolish(self)
         self.style().polish(self)
 
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.customContextMenuRequested.connect(self.show_context_menu)
-
         self.setup_ui()
+        self.install_context_menu(self)
 
     def setup_ui(self):
         self.main_layout = QHBoxLayout(self)
@@ -232,10 +230,6 @@ class MessageBubble(QFrame):
         self.bubble.setProperty("isOwn", "true" if self.is_own else "false")
         self.bubble.style().unpolish(self.bubble)
         self.bubble.style().polish(self.bubble)
-        
-        # Включаем контекстное меню для bubble
-        self.bubble.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.bubble.customContextMenuRequested.connect(self.show_context_menu)
 
         bubble_layout = QVBoxLayout(self.bubble)
         bubble_layout.setContentsMargins(10, 7, 10, 7)
@@ -253,10 +247,6 @@ class MessageBubble(QFrame):
         self.text_label.setWordWrap(True)
         self.text_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.text_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        
-        # Включаем контекстное меню для text_label
-        self.text_label.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.text_label.customContextMenuRequested.connect(self.show_context_menu)
 
         self.update_text_display()
         bubble_layout.addWidget(self.text_label)
@@ -351,7 +341,17 @@ class MessageBubble(QFrame):
         else:
             menu.addAction("Выделить сообщение", self.toggle_selection)
 
-        menu.exec(self.mapToGlobal(position))
+        global_pos = QCursor.pos()
+        menu.exec(global_pos)
+    
+    def install_context_menu(self, widget):
+        """Устанавливает контекстное меню для виджета и всех его дочерних элементов."""
+        widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        widget.customContextMenuRequested.connect(self.show_context_menu)
+
+        for child in widget.findChildren(QWidget):
+            child.setContextMenuPolicy(Qt.CustomContextMenu)
+            child.customContextMenuRequested.connect(self.show_context_menu)
     
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -939,10 +939,9 @@ class ContactsWidget(QWidget):
         if delete_message(message_id):
             bubble = self.find_message_bubble(message_id)
             if bubble:
-                area = self.chat_stack.currentWidget()
-                if area:
-                    area.messages_layout.removeWidget(bubble)
-                bubble.deleteLater()
+                bubble.msg_data["is_deleted"] = True
+                bubble.msg_data["text"] = ""
+                bubble.update_text_display()
 
     def on_edit_message(self, message_id, new_text):
         if edit_message(message_id, new_text):
