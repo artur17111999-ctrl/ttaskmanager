@@ -1148,13 +1148,13 @@ def update_task(task_id, title=None, description=None, executor_id=None, status=
         
         # Если переданы status_id или priority_id, получаем соответствующие текстовые значения
         if status_id is not None:
-            cursor.execute("SELECT name FROM task_statuses WHERE id = %s", (status_id,))
+            cursor.execute("SELECT title FROM task_statuses WHERE id = %s", (status_id,))
             result = cursor.fetchone()
             if result:
                 status = result[0]
         
         if priority_id is not None:
-            cursor.execute("SELECT name FROM task_priorities WHERE id = %s", (priority_id,))
+            cursor.execute("SELECT title FROM task_priorities WHERE id = %s", (priority_id,))
             result = cursor.fetchone()
             if result:
                 priority = result[0]
