@@ -158,11 +158,9 @@ class TaskCreatorWidget(QWidget):
         self.author_label = QLabel(self.current_user_name)
         self.author_label.setStyleSheet("""
             QLabel {
-                background-color: #1976d2;
-                color: white;
                 padding: 10px;
-                border-radius: 4px;
                 font-weight: bold;
+                color: white;
             }
         """)
         right_layout.addWidget(self.author_label)
@@ -505,7 +503,6 @@ class TasksWidget(QWidget):
         self.tasks_scroll.setStyleSheet("""
             QScrollArea {
                 border: none;
-                background-color: #f9f9f9;
             }
         """)
         
