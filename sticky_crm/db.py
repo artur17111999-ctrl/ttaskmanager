@@ -1112,6 +1112,47 @@ def update_task(task_id, title, description, executor_id, status, priority, dead
         conn.close()
 
 
+def delete_task(task_id, user_id):
+    """Удалить задачу.
+    Пользователь может удалить только задачу, которую он создал.
+    Возвращает True при успехе, False при ошибке или отсутствии прав.
+    """
+    conn = get_connection()
+    if not conn:
+        return False, "Ошибка подключения к базе данных"
+    try:
+        cursor = conn.cursor()
+        
+        # Проверяем, является ли пользователь автором задачи
+        cursor.execute("SELECT author_id FROM tasks WHERE id = %s", (task_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return False, "Задача не найдена"
+        
+        author_id = result[0]
+        
+        if author_id != user_id:
+            return False, "Удалить задачу может только её автор"
+        
+        # Удаляем связанные записи
+        cursor.execute("DELETE FROM task_observers WHERE task_id = %s", (task_id,))
+        cursor.execute("DELETE FROM task_tags_link WHERE task_id = %s", (task_id,))
+        
+        # Удаляем саму задачу
+        cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
+        
+        conn.commit()
+        return True, "Задача успешно удалена"
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка удаления задачи: {e}")
+        return False, f"Ошибка: {str(e)}"
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', sort_order='DESC'):
     """Получить список задач с фильтрацией.
     Если передан current_user_id, возвращаются задачи, где пользователь
@@ -1136,7 +1177,8 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
                 t.created_at,
                 a.last_name || ' ' || a.first_name as author_name,
                 e.last_name || ' ' || e.first_name as executor_name,
-                c.last_name || ' ' || c.first_name as creator_name
+                c.last_name || ' ' || c.first_name as creator_name,
+                t.author_id
             FROM tasks t
             JOIN employees a ON t.author_id = a.id
             JOIN employees e ON t.executor_id = e.id
@@ -1228,7 +1270,8 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
                 'created_at': row[6],
                 'author_name': row[7],
                 'executor_name': row[8],
-                'creator_name': row[9]
+                'creator_name': row[9],
+                'author_id': row[10]
             })
         return tasks
     except Exception as e:
