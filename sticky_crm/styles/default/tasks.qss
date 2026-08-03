@@ -124,3 +124,115 @@ QLabel#priorityBlocker {
     font-size: 12px;
     font-weight: bold;
 }
+
+/* Группа комментариев */
+QGroupBox#commentsGroup {
+    background-color: #1e2938;
+    border: 1px solid #3a4658;
+    border-radius: 16px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-weight: bold;
+    color: white;
+}
+
+QGroupBox#commentsGroup::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 15px;
+    padding: 0 5px;
+    color: #c8d4e3;
+}
+
+/* Группа добавления комментария */
+QGroupBox#commentInputGroup {
+    background-color: #1e2938;
+    border: 1px solid #3a4658;
+    border-radius: 16px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-weight: bold;
+    color: white;
+}
+
+QGroupBox#commentInputGroup::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 15px;
+    padding: 0 5px;
+    color: #c8d4e3;
+}
+
+/* Поле ввода комментария */
+QTextEdit#commentEdit {
+    background-color: #18222d;
+    border: 1px solid #3a4658;
+    border-radius: 8px;
+    color: white;
+    padding: 8px;
+    font-size: 14px;
+    selection-background-color: #3390ec;
+}
+
+QTextEdit#commentEdit:focus {
+    border: 1px solid #3390ec;
+}
+
+/* Кнопка отправки комментария */
+QPushButton#sendCommentButton {
+    background: qlineargradient(
+        x1:0, y1:0,
+        x2:1, y2:1,
+        stop:0 #3390ec,
+        stop:1 #2578c9
+    );
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    min-width: 100px;
+}
+
+QPushButton#sendCommentButton:hover {
+    background: qlineargradient(
+        x1:0, y1:0,
+        x2:1, y2:1,
+        stop:0 #4da3ff,
+        stop:1 #3390ec
+    );
+}
+
+QPushButton#sendCommentButton:pressed {
+    background: #1e5f99;
+}
+
+/* Карточка комментария */
+QFrame#commentFrame {
+    background-color: #18222d;
+    border-radius: 8px;
+    border: 1px solid #3a4658;
+}
+
+/* Автор комментария */
+QLabel#commentAuthorLabel {
+    color: white;
+    font-size: 13px;
+    font-weight: bold;
+    background-color: transparent;
+}
+
+/* Время комментария */
+QLabel#commentTimeLabel {
+    color: #8fa3b8;
+    font-size: 11px;
+    background-color: transparent;
+}
+
+/* Текст комментария */
+QLabel#commentTextLabel {
+    color: white;
+    font-size: 14px;
+    background-color: transparent;
+}

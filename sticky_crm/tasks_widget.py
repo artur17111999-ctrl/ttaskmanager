@@ -1220,13 +1220,6 @@ class TaskDetailView(QWidget):
         frame = QFrame()
         frame.setObjectName("commentFrame")
         frame.setFrameStyle(QFrame.NoFrame)
-        frame.setStyleSheet("""
-QFrame#commentFrame {
-    background-color: #f7f8fa;
-    border-radius: 8px;
-    border: 1px solid #e1e4e8;
-}
-""")
         
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -1235,11 +1228,11 @@ QFrame#commentFrame {
         # Заголовок: автор и время
         header_layout = QHBoxLayout()
         author_label = QLabel(f"<b>{comment['author_name']}</b>")
-        author_label.setStyleSheet("font-size: 13px;")
+        author_label.setObjectName("commentAuthorLabel")
         header_layout.addWidget(author_label)
         
         time_label = QLabel(comment['created_at'])
-        time_label.setStyleSheet("color: #888; font-size: 11px;")
+        time_label.setObjectName("commentTimeLabel")
         header_layout.addStretch()
         header_layout.addWidget(time_label)
         
@@ -1249,10 +1242,7 @@ QFrame#commentFrame {
         text_label = QLabel(comment['text'])
         text_label.setWordWrap(True)
         text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        text_label.setStyleSheet("""
-font-size: 14px;
-color: #222;
-""")
+        text_label.setObjectName("commentTextLabel")
         layout.addWidget(text_label)
         
         return frame
