@@ -197,8 +197,7 @@ class TaskDetailView(QWidget):
                 QMessageBox.warning(self, "Ошибка", "Задача не найдена")
                 self.go_back()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить задачу:
-{e}")
+            QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить задачу:\n{e}")
     
     def update_ui(self):
         if not self.task_data:
