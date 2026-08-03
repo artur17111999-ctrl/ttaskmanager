@@ -5,25 +5,33 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Virtual environments
+# Dependencies
 .venv/
 venv/
 env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+MANIFEST
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-*.swp
-*.swo
-
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Environment variables
+# Environment
 .env
 .env.local
-*.env.*
+*.env*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 ```
