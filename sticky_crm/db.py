@@ -1371,6 +1371,7 @@ def get_task_detail(task_id):
                 tc.id,
                 tc.comment_text,
                 tc.created_at,
+                tc.author_id,
                 e.last_name || ' ' || e.first_name as author_name
             FROM task_comments tc
             JOIN employees e ON tc.author_id = e.id
@@ -1383,7 +1384,8 @@ def get_task_detail(task_id):
                 'id': row[0],
                 'text': row[1],
                 'created_at': row[2].strftime("%d.%m.%Y %H:%M") if row[2] else "",
-                'author_name': row[3]
+                'author_id': row[3],
+                'author_name': row[4]
             })
         
         return task
@@ -1407,8 +1409,9 @@ def get_task_comments(task_id):
                 tc.id,
                 tc.comment_text,
                 tc.created_at,
-                e.last_name || ' ' || e.first_name as author_name,
-                tc.author_id
+                tc.author_id,
+                e.last_name || ' ' || e.first_name as author_name
+
             FROM task_comments tc
             JOIN employees e ON tc.author_id = e.id
             WHERE tc.task_id = %s
@@ -1421,8 +1424,8 @@ def get_task_comments(task_id):
                 'id': row[0],
                 'text': row[1],
                 'created_at': row[2].strftime("%d.%m.%Y %H:%M") if row[2] else "",
-                'author_name': row[3],
-                'author_id': row[4]
+                'author_id': row[3],
+                'author_name': row[4]
             })
         return comments
     except Exception as e:
