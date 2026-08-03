@@ -19,7 +19,7 @@ from db import (
     create_group_chat_auto, get_chat_messages, send_message,
     edit_message, delete_message, mark_messages_as_read,
     mark_notifications_as_read, get_personal_chats, get_unread_message_counts,
-    get_new_messages
+    get_new_messages, delete_group_chat
 )
 
 
@@ -361,6 +361,8 @@ class ContactsWidget(QWidget):
         self.contact_list.setItemDelegate(UnreadBadgeDelegate(self))
         self.contact_list.setObjectName("contactsList")
         self.contact_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.contact_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.contact_list.customContextMenuRequested.connect(self.show_contact_context_menu)
         self.contact_list.currentItemChanged.connect(self.on_current_changed)
         left_layout.addWidget(self.contact_list)
 
@@ -450,6 +452,9 @@ class ContactsWidget(QWidget):
             item = QListWidgetItem(prefix + c['name'])
             item.setData(Qt.UserRole, c)
             item.setData(Qt.UserRole + 1, unread)
+            # Для групповых чатов сохраняем created_by для проверки прав удаления
+            if c['type'] == 'group' and c.get('created_by') is not None:
+                item.setData(Qt.UserRole + 2, c['created_by'])
             self.contact_list.addItem(item)
 
         self.highlight_current_chat()
@@ -743,6 +748,58 @@ class ContactsWidget(QWidget):
                 self.load_contacts()
             else:
                 QMessageBox.critical(self, "Ошибка", "Не удалось создать групповой чат.")
+
+    def show_contact_context_menu(self, position):
+        """Контекстное меню для списка контактов (правая кнопка мыши)."""
+        item = self.contact_list.itemAt(position)
+        if not item:
+            return
+        data = item.data(Qt.UserRole)
+        if not data or data['type'] != 'group':
+            return
+        
+        # Проверяем, является ли текущий пользователь создателем группы
+        created_by = item.data(Qt.UserRole + 2)
+        if created_by != self.current_user_id:
+            return
+        
+        menu = QMenu(self)
+        delete_action = QAction("Удалить групповой чат", self)
+        delete_action.triggered.connect(lambda: self.delete_group_chat_action(data['chat_id'], item))
+        menu.addAction(delete_action)
+        menu.exec(self.contact_list.mapToGlobal(position))
+
+    def delete_group_chat_action(self, chat_id, item):
+        """Удаление группового чата."""
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение удаления",
+            f"Вы уверены, что хотите удалить групповой чат?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            if delete_group_chat(chat_id, self.current_user_id):
+                # Удаляем элемент из списка
+                row = self.contact_list.row(item)
+                if row >= 0:
+                    self.contact_list.takeItem(row)
+                # Если удалили текущий чат, сбрасываем
+                if self.current_chat_id == chat_id:
+                    self.current_chat_id = None
+                    self.current_chat_name = ""
+                    self.current_chat_type = None
+                    self.chat_header.setText("Выберите чат")
+                    self.send_btn.setEnabled(False)
+                # Очищаем кэш области сообщений
+                if chat_id in self.chat_areas:
+                    area = self.chat_areas[chat_id]
+                    self.chat_stack.removeWidget(area)
+                    area.deleteLater()
+                    del self.chat_areas[chat_id]
+                QMessageBox.information(self, "Успешно", "Групповой чат удалён.")
+            else:
+                QMessageBox.critical(self, "Ошибка", "Не удалось удалить групповой чат.")
 
     def open_chat_by_id(self, chat_id):
         """Открыть чат по ID (используется для перехода из уведомлений)."""

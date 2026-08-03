@@ -517,7 +517,7 @@ def get_contacts_and_groups(user_id, search_query=None):
 
         # Групповые чаты, где пользователь участник
         group_query = """
-            SELECT c.id, c.name
+            SELECT c.id, c.name, c.created_by
             FROM chats c
             JOIN chat_members cm ON c.id = cm.chat_id
             WHERE c.is_group = TRUE AND cm.employee_id = %s
@@ -529,8 +529,8 @@ def get_contacts_and_groups(user_id, search_query=None):
         group_query += " ORDER BY c.name"
         cursor.execute(group_query, gparams)
         for row in cursor.fetchall():
-            chat_id, name = row
-            results.append({'type': 'group', 'id': chat_id, 'name': name, 'chat_id': chat_id})
+            chat_id, name, created_by = row
+            results.append({'type': 'group', 'id': chat_id, 'name': name, 'chat_id': chat_id, 'created_by': created_by})
 
         # Чат "Избранное"
         return results
@@ -577,6 +577,41 @@ def create_group_chat_auto(user_id, member_ids):
     finally:
         cursor.close()
         conn.close()
+
+
+def delete_group_chat(chat_id, user_id):
+    """
+    Удалить групповой чат. Может только создатель (created_by).
+    Возвращает True при успехе.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        # Проверяем, что пользователь является создателем
+        cursor.execute("SELECT created_by FROM chats WHERE id = %s AND is_group = TRUE", (chat_id,))
+        row = cursor.fetchone()
+        if not row or row[0] != user_id:
+            return False
+        # Удаляем участников
+        cursor.execute("DELETE FROM chat_members WHERE chat_id = %s", (chat_id,))
+        # Удаляем сообщения
+        cursor.execute("DELETE FROM messages WHERE chat_id = %s", (chat_id,))
+        # Удаляем уведомления
+        cursor.execute("DELETE FROM notifications WHERE chat_id = %s", (chat_id,))
+        # Удаляем чат
+        cursor.execute("DELETE FROM chats WHERE id = %s", (chat_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Ошибка удаления группы: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
 
 def mark_messages_as_read(chat_id, user_id):
     """
