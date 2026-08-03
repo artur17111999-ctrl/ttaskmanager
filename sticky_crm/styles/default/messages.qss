@@ -31,6 +31,13 @@ QLabel#messageText {
     font-size: 10.5pt;
 }
 
+/* Информация о пересланном сообщении */
+QLabel#forwardedLabel {
+    color: #8fa3b8;
+    font-size: 7pt;
+    font-style: italic;
+    background-color: transparent;
+}
 
 /* Время */
 QLabel#timeLabel {
