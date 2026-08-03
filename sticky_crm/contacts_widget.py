@@ -319,14 +319,10 @@ class MessageBubble(QFrame):
 
     def show_context_menu(self, position):
         # Получаем доступ к родительскому виджету для управления кнопками
-        parent_widget = self.parent()
+        # Ищем ContactsWidget через цепочку родителей
+        parent_widget = self.window()
         while parent_widget and not isinstance(parent_widget, ContactsWidget):
-            parent_widget = parent_widget.parent()
-        
-        # Проверяем, что клик был именно на bubble (облаке сообщения)
-        pos_in_bubble = self.bubble.mapFromGlobal(self.mapToGlobal(position))
-        if not self.bubble.rect().contains(pos_in_bubble):
-            return
+            parent_widget = parent_widget.parentWidget()
         
         menu = QMenu(self)
         
@@ -374,18 +370,13 @@ class MessageBubble(QFrame):
             parent_widget.forward_selected_messages()
 
     def mousePressEvent(self, event):
-        # Обработка правой кнопки мыши для вызова контекстного меню или выделения
+        # Обработка правой кнопки мыши - Qt сам вызовет customContextMenuRequested
         if event.button() == Qt.RightButton:
-            # Проверяем, был ли клик непосредственно на облаке сообщения
-            pos_in_bubble = self.bubble.mapFromGlobal(event.globalPosition().toPoint())
-            if self.bubble.rect().contains(pos_in_bubble):
-                # Клик на облаке - показываем контекстное меню с опциями для выделенных
-                self.show_context_menu(event.pos())
-            else:
-                # Клик левее облака - переключаем выделение сообщения
-                self.toggle_selection()
+            # Не обрабатываем здесь, Qt автоматически вызовет customContextMenuRequested
+            super().mousePressEvent(event)
+            return
         elif event.button() == Qt.LeftButton:
-            # Левая кнопка - выделяем сообщение (всегда работает для выделения)
+            # Левая кнопка - выделяем сообщение
             self.toggle_selection()
         super().mousePressEvent(event)
 
@@ -472,7 +463,11 @@ class ChatMessagesArea(QScrollArea):
             self.selected_messages.discard(message_id)
         
         # Сообщаем родительскому виджету об изменении выделения
-        parent = self.parent()
+        # Ищем ContactsWidget через цепочку родителей
+        parent = self.parentWidget()
+        while parent and not isinstance(parent, ContactsWidget):
+            parent = parent.parentWidget()
+        
         if parent and hasattr(parent, 'on_selection_changed'):
             parent.on_selection_changed(len(self.selected_messages))
 
@@ -821,105 +816,6 @@ class ContactsWidget(QWidget):
                     return
         self.contact_list.clearSelection()
 
-    def load_messages(self):
-        """Загрузка всех сообщений без мерцания."""
-        if self.current_chat_id is None:
-            return
-
-        messages = get_chat_messages(self.current_chat_id)
-
-        # Замораживаем обновление области сообщений
-        self.messages_area.setUpdatesEnabled(False)
-
-        # Очищаем существующие сообщения
-        self.messages_area.clear_messages()
-
-        # Добавляем новые сообщения
-        for msg in messages:
-            is_own = (msg['sender_id'] == self.current_user_id)
-            bubble = MessageBubble(msg, is_own)
-            bubble.editRequested.connect(self.on_edit_request)
-            bubble.saveEditRequested.connect(self.on_edit_message)
-            bubble.deleteRequested.connect(self.on_delete_request)
-            bubble.editFinished.connect(self.resume_timer)
-            self.messages_area.add_message(bubble)
-
-        # Размораживаем обновление — все изменения применятся одним кадром
-        self.messages_area.setUpdatesEnabled(True)
-
-        if messages:
-            self.last_message_id = messages[-1]['id']
-
-        # Прокрутка вниз
-        QTimer.singleShot(10, lambda: self.messages_area.verticalScrollBar().setValue(
-            self.messages_area.verticalScrollBar().maximum()
-        ))
-
-    def eventFilter(self, obj, event):
-        if obj == self.message_input:
-            if event.type() == QEvent.Type.KeyPress:
-                if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-                    if event.modifiers() & Qt.ShiftModifier:
-                        return False
-                    self.send_message_action()
-                    return True
-        return super().eventFilter(obj, event)
-
-    def send_message_action(self):
-        if self.current_chat_id is None:
-            return
-        text = self.message_input.toPlainText().strip()
-        if not text:
-            return
-
-        if send_message(self.current_chat_id, self.current_user_id, text):
-            self.message_input.clear()
-            mark_messages_as_read(self.current_chat_id, self.current_user_id)
-
-            area = self.chat_stack.currentWidget()
-            if not area:
-                return
-
-            # Получаем последнее отправленное (правильная сортировка!)
-            # В db.py get_chat_messages должен использовать ORDER BY created_at DESC LIMIT 1,
-            # либо берём последний элемент из полного списка.
-            # Здесь делаем запрос с LIMIT 1 и DESC
-            new_messages = get_chat_messages(self.current_chat_id, limit=1, order_desc=True)
-            if new_messages:
-                msg = new_messages[0]
-                is_own = (msg['sender_id'] == self.current_user_id)
-                bubble = MessageBubble(msg, is_own)
-                bubble.editRequested.connect(self.on_edit_request)
-                bubble.saveEditRequested.connect(self.on_edit_message)
-                bubble.deleteRequested.connect(self.on_delete_request)
-                bubble.editFinished.connect(self.resume_timer)
-                area.add_message(bubble)
-                self.last_message_id = msg['id']
-
-                scrollbar = area.verticalScrollBar()
-                QTimer.singleShot(50, lambda: scrollbar.setValue(scrollbar.maximum()))
-
-            self.update_unread_badges()
-
-    def _update_existing_bubbles(self, area, messages):
-        """Обновить статусы видимых сообщений."""
-        msg_dict = {m['id']: m for m in messages}
-        for i in range(area.messages_layout.count()):
-            item = area.messages_layout.itemAt(i)
-            if item and item.widget():
-                w = item.widget()
-                if isinstance(w, MessageBubble) and w.message_id in msg_dict:
-                    updated = msg_dict[w.message_id]
-                    w.msg_data['is_read'] = updated['is_read']
-                    w.msg_data['is_deleted'] = updated['is_deleted']
-                    w.msg_data['text'] = updated['text']
-                    w.msg_data['edited_at'] = updated['edited_at']
-                    w.update_text_display()
-                    if hasattr(w, 'update_status_icon'):
-                        w.update_status_icon()
-                    if hasattr(w, 'edited_label'):
-                        w.edited_label.setVisible(bool(updated.get('edited_at')))
-
     def refresh_messages(self):
         if self._editing or self.current_chat_id is None:
             return
@@ -949,10 +845,69 @@ class ContactsWidget(QWidget):
         if scrollbar.value() >= scrollbar.maximum() - 10:
             QTimer.singleShot(50, lambda: scrollbar.setValue(scrollbar.maximum()))
 
-        # Обновление статусов существующих сообщений (прочитано/удалено)
-        self._update_existing_bubbles(area, new_messages)
-
         self.update_unread_badges()
+
+    def _update_existing_bubbles(self, area, messages):
+        """Обновить статусы видимых сообщений."""
+        msg_dict = {m['id']: m for m in messages}
+        for i in range(area.messages_layout.count()):
+            item = area.messages_layout.itemAt(i)
+            if item and item.widget():
+                w = item.widget()
+                if isinstance(w, MessageBubble) and w.message_id in msg_dict:
+                    updated = msg_dict[w.message_id]
+                    w.msg_data['is_read'] = updated['is_read']
+                    w.msg_data['is_deleted'] = updated['is_deleted']
+                    w.msg_data['text'] = updated['text']
+                    w.msg_data['edited_at'] = updated['edited_at']
+                    w.update_text_display()
+                    if hasattr(w, 'update_status_icon'):
+                        w.update_status_icon()
+                    if hasattr(w, 'edited_label'):
+                        w.edited_label.setVisible(bool(updated.get('edited_at')))
+
+    def eventFilter(self, obj, event):
+        if obj == self.message_input:
+            if event.type() == QEvent.Type.KeyPress:
+                if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                    if event.modifiers() & Qt.ShiftModifier:
+                        return False
+                    self.send_message_action()
+                    return True
+        return super().eventFilter(obj, event)
+
+    def send_message_action(self):
+        if self.current_chat_id is None:
+            return
+        text = self.message_input.toPlainText().strip()
+        if not text:
+            return
+
+        if send_message(self.current_chat_id, self.current_user_id, text):
+            self.message_input.clear()
+            mark_messages_as_read(self.current_chat_id, self.current_user_id)
+
+            area = self.chat_stack.currentWidget()
+            if not area:
+                return
+
+            # Получаем последнее отправленное сообщение
+            new_messages = get_chat_messages(self.current_chat_id, limit=1, order_desc=True)
+            if new_messages:
+                msg = new_messages[0]
+                is_own = (msg['sender_id'] == self.current_user_id)
+                bubble = MessageBubble(msg, is_own)
+                bubble.editRequested.connect(self.on_edit_request)
+                bubble.saveEditRequested.connect(self.on_edit_message)
+                bubble.deleteRequested.connect(self.on_delete_request)
+                bubble.editFinished.connect(self.resume_timer)
+                area.add_message(bubble)
+                self.last_message_id = msg['id']
+
+                scrollbar = area.verticalScrollBar()
+                QTimer.singleShot(50, lambda: scrollbar.setValue(scrollbar.maximum()))
+
+            self.update_unread_badges()
 
     def update_unread_badges(self):
         unread_counts = get_unread_message_counts(self.current_user_id)
