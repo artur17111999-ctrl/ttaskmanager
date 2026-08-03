@@ -177,7 +177,6 @@ class MessageBubble(QFrame):
 
         self.update_text_display()
         bubble_layout.addWidget(self.text_label)
-        bubble_layout.setStretch(0, 1)
 
         bottom_row = QHBoxLayout()
         bottom_row.setContentsMargins(0, 0, 0, 0)
