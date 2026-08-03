@@ -3,8 +3,64 @@
 """
 
 import psycopg2
+from psycopg2 import Binary
 from datetime import datetime
 from config import DB_CONFIG
+
+
+def _ensure_image_attachments_table(cursor):
+    cursor.execute("CREATE TABLE IF NOT EXISTS image_attachments (id SERIAL PRIMARY KEY, owner_type VARCHAR(20) NOT NULL, owner_id INTEGER NOT NULL, image_data BYTEA NOT NULL, file_name VARCHAR(255) NOT NULL DEFAULT 'screenshot.png', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_image_attachments_owner ON image_attachments(owner_type, owner_id)")
+
+
+def _save_image_attachments(cursor, owner_type, owner_id, images):
+    if not images:
+        return
+    _ensure_image_attachments_table(cursor)
+    for number, image in enumerate(images, start=1):
+        cursor.execute("INSERT INTO image_attachments (owner_type, owner_id, image_data, file_name) VALUES (%s, %s, %s, %s)", (owner_type, owner_id, Binary(image), f"screenshot_{number}.png"))
+
+
+def get_image_attachments(owner_type, owner_id):
+    conn = get_connection()
+    if not conn:
+        return []
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_image_attachments_table(cursor)
+        conn.commit()
+        cursor.execute("SELECT image_data FROM image_attachments WHERE owner_type = %s AND owner_id = %s ORDER BY id", (owner_type, owner_id))
+        return [bytes(row[0]) for row in cursor.fetchall()]
+    except Exception as error:
+        print(f"Failed to load screenshots: {error}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+def add_image_attachments(owner_type, owner_id, images):
+    if not images:
+        return True
+    conn = get_connection()
+    if not conn:
+        return False
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _save_image_attachments(cursor, owner_type, owner_id, images)
+        conn.commit()
+        return True
+    except Exception as error:
+        conn.rollback()
+        print(f"Failed to save screenshots: {error}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
 
 
 def get_connection():
@@ -402,7 +458,7 @@ def get_chat_messages(chat_id, limit=50, offset=0, order_desc=False):
         conn.close()
 
 
-def send_message(chat_id, sender_id, text):
+def send_message(chat_id, sender_id, text, images=None):
     conn = get_connection()
     if not conn:
         return False
@@ -413,6 +469,7 @@ def send_message(chat_id, sender_id, text):
             (chat_id, sender_id, text)
         )
         message_id = cursor.fetchone()[0]
+        _save_image_attachments(cursor, 'message', message_id, images)
         conn.commit()
 
         # Уведомление для личных чатов
@@ -1091,7 +1148,7 @@ def create_tag(name, color="#808080"):
         conn.close()
 
 
-def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id, status_id=None, priority_id=None):
+def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id, status_id=None, priority_id=None, images=None):
     """Создать новую задачу."""
     conn = get_connection()
     if not conn:
@@ -1112,6 +1169,7 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
                 RETURNING id
             """, (title, description, author_id, executor_id, deadline, priority, creator_id))
         task_id = cursor.fetchone()[0]
+        _save_image_attachments(cursor, 'task', task_id, images)
         
         # Добавляем наблюдателей
         for obs_id in observers_ids:
@@ -1547,7 +1605,7 @@ def get_task_comments(task_id):
         conn.close()
 
 
-def add_task_comment(task_id, author_id, comment_text):
+def add_task_comment(task_id, author_id, comment_text, images=None):
     """Добавить комментарий к задаче."""
     conn = get_connection()
     if not conn:
@@ -1557,7 +1615,10 @@ def add_task_comment(task_id, author_id, comment_text):
         cursor.execute("""
             INSERT INTO task_comments (task_id, author_id, comment_text)
             VALUES (%s, %s, %s)
+            RETURNING id
         """, (task_id, author_id, comment_text))
+        comment_id = cursor.fetchone()[0]
+        _save_image_attachments(cursor, 'comment', comment_id, images)
         conn.commit()
         return True
     except Exception as e:

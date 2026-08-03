@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor, QClipboard
 
+from screenshot_attachments import ScreenshotTextEdit, ScreenshotPreview, add_image_previews
 from .base import EMPLOYEE_ID_ROLE, TAG_ID_ROLE, TAG_COLOR_ROLE
 
 
@@ -139,7 +140,7 @@ class TaskDetailView(QWidget):
         comment_input_layout.setContentsMargins(10, 10, 10, 10)
         
         comment_bottom = QHBoxLayout()
-        self.comment_edit = QTextEdit()
+        self.comment_edit = ScreenshotTextEdit()
         self.comment_edit.setObjectName("commentEdit")
         self.comment_edit.setPlaceholderText("Написать комментарий...")
         self.comment_edit.setMinimumHeight(70)
@@ -149,6 +150,7 @@ class TaskDetailView(QWidget):
         send_comment_btn.setObjectName("sendCommentButton")
         send_comment_btn.clicked.connect(self.send_comment)
         comment_bottom.addWidget(send_comment_btn)
+        comment_input_layout.addWidget(ScreenshotPreview(self.comment_edit))
         comment_input_layout.addLayout(comment_bottom)
         content_layout.addWidget(comment_input_group)
         
@@ -333,7 +335,7 @@ class TaskDetailView(QWidget):
         self.new_tag_edit.clear()
 
     def load_comments(self):
-        from db import get_task_comments
+        from db import get_task_comments, get_image_attachments
         while self.comments_container_layout.count():
             layout_item = self.comments_container_layout.takeAt(0)
             widget = layout_item.widget()
@@ -362,16 +364,18 @@ class TaskDetailView(QWidget):
             text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             card_layout.addWidget(author_label)
             card_layout.addWidget(text_label)
+            add_image_previews(card_layout, get_image_attachments('comment', comment['id']))
             self.comments_container_layout.addWidget(card)
 
     def send_comment(self):
         from db import add_task_comment
         text = self.comment_edit.toPlainText().strip()
-        if not text:
+        images = self.comment_edit.screenshots
+        if not text and not images:
             QMessageBox.warning(self, "Ошибка", "Введите текст комментария")
             return
         try:
-            success = add_task_comment(self.task_id, self.current_user_id, text)
+            success = add_task_comment(self.task_id, self.current_user_id, text, images)
         except Exception as error:
             QMessageBox.critical(self, "Ошибка", f"Не удалось добавить комментарий:\n{error}")
             return
@@ -379,6 +383,7 @@ class TaskDetailView(QWidget):
             QMessageBox.critical(self, "Ошибка", "Не удалось добавить комментарий")
             return
         self.comment_edit.clear()
+        self.comment_edit.clear_screenshots()
         self.load_comments()
 
     def save_task(self):

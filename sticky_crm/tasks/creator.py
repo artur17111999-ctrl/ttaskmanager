@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor
 
+from screenshot_attachments import ScreenshotTextEdit, ScreenshotPreview
 from .base import TaskBaseWidget, EMPLOYEE_ID_ROLE, TAG_ID_ROLE, TAG_COLOR_ROLE
 
 
@@ -70,11 +71,12 @@ class TaskCreatorWidget(TaskBaseWidget):
         left_layout.addWidget(self.title_edit)
         
         left_layout.addWidget(QLabel("Полное описание задачи:"))
-        self.description_edit = QTextEdit()
+        self.description_edit = ScreenshotTextEdit()
         self.description_edit.setObjectName("descriptionEdit")
         self.description_edit.setPlaceholderText("Введите подробное описание задачи")
         self.description_edit.setMinimumHeight(200)
         left_layout.addWidget(self.description_edit)
+        left_layout.addWidget(ScreenshotPreview(self.description_edit))
         
         files_label = QLabel("📎 Файлы будут доступны позже")
         files_label.setObjectName("filesLabel")
@@ -275,7 +277,8 @@ class TaskCreatorWidget(TaskBaseWidget):
                 tag_ids=selected_tag_ids,
                 creator_id=self.current_user_id,
                 status_id=status_id,
-                priority_id=priority_id
+                priority_id=priority_id,
+                images=self.description_edit.screenshots
             )
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось создать задачу:\n{e}")
@@ -291,7 +294,8 @@ class TaskCreatorWidget(TaskBaseWidget):
         """Отменить создание задачи."""
         has_data = (
             self.title_edit.text().strip() or
-            self.description_edit.toPlainText().strip()
+            self.description_edit.toPlainText().strip() or
+            self.description_edit.screenshots
         )
         
         if has_data:
@@ -307,6 +311,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         
         self.title_edit.clear()
         self.description_edit.clear()
+        self.description_edit.clear_screenshots()
         self.executor_combo.setCurrentIndex(0)
         self.deadline_edit.setDate(QDate.currentDate().addDays(7))
         self.priority_combo.setCurrentIndex(1)

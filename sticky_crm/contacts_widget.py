@@ -14,12 +14,13 @@ from PySide6.QtWidgets import (
 from datetime import datetime   # для edited_at
 from PySide6.QtCore import Qt, QTimer, Signal, QEvent, QRect, QSize
 from PySide6.QtGui import QFont, QAction, QColor, QPainter, QPen, QCursor
+from screenshot_attachments import ScreenshotTextEdit, ScreenshotPreview, add_image_previews
 from db import (
     get_contacts_and_groups, get_or_create_personal_chat,
     create_group_chat_auto, get_chat_messages, send_message,
     edit_message, delete_message, mark_messages_as_read,
     mark_notifications_as_read, get_personal_chats, get_unread_message_counts,
-    get_new_messages, delete_group_chat
+    get_new_messages, delete_group_chat, get_image_attachments
 )
 
 
@@ -250,6 +251,7 @@ class MessageBubble(QFrame):
 
         self.update_text_display()
         bubble_layout.addWidget(self.text_label)
+        add_image_previews(bubble_layout, get_image_attachments('message', self.message_id))
 
         bottom_row = QHBoxLayout()
         bottom_row.setContentsMargins(0, 0, 0, 0)
@@ -588,7 +590,7 @@ class ContactsWidget(QWidget):
         input_layout.setContentsMargins(10, 5, 10, 5)
         input_layout.setSpacing(8)
 
-        self.message_input = QTextEdit()
+        self.message_input = ScreenshotTextEdit()
         self.message_input.setPlaceholderText("Сообщение...")
         self.message_input.setObjectName("messageInput")
         self.message_input.setMinimumHeight(38)
@@ -602,6 +604,7 @@ class ContactsWidget(QWidget):
         input_layout.addWidget(self.message_input)
         input_layout.addWidget(self.send_btn)
         chat_layout.addWidget(input_frame)
+        chat_layout.addWidget(ScreenshotPreview(self.message_input))
 
         main_layout.addWidget(left_panel)
         main_layout.addWidget(self.chat_area, 1)
@@ -711,6 +714,7 @@ class ContactsWidget(QWidget):
 
         # Очищаем поле ввода при переключении чата
         self.message_input.clear()
+        self.message_input.clear_screenshots()
 
         self.current_chat_id = chat_id
         self.last_message_id = 0
@@ -882,11 +886,13 @@ class ContactsWidget(QWidget):
         if self.current_chat_id is None:
             return
         text = self.message_input.toPlainText().strip()
-        if not text:
+        images = self.message_input.screenshots
+        if not text and not images:
             return
 
-        if send_message(self.current_chat_id, self.current_user_id, text):
+        if send_message(self.current_chat_id, self.current_user_id, text, images):
             self.message_input.clear()
+            self.message_input.clear_screenshots()
             mark_messages_as_read(self.current_chat_id, self.current_user_id)
 
             area = self.chat_stack.currentWidget()
