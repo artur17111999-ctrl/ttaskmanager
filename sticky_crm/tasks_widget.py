@@ -2,9 +2,9 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame, QSplitter, QTextEdit, QLineEdit, QComboBox, QDateEdit,
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QStackedWidget,
-    QDialog, QGroupBox, QFormLayout
+    QDialog, QGroupBox, QFormLayout, QSizePolicy
 )
-from PySide6.QtCore import Qt, QDate, Signal
+from PySide6.QtCore import Qt, QDate, Signal, QTimer
 from PySide6.QtGui import QColor
 
 from db import (
@@ -1003,34 +1003,111 @@ class TaskDetailView(QWidget):
         tags_layout.addWidget(self.tags_list)
         content_layout.addWidget(self.tags_group)
         
-        # Комментарии
+        # ============================
+        # Комментарии как в Yandex Tracker
+        # ============================
+
         comments_group = QGroupBox("Комментарии")
-        self.comments_layout_inner = QVBoxLayout(comments_group)
+        comments_group.setObjectName("commentsGroup")
+
+        comments_layout = QVBoxLayout(comments_group)
+        comments_layout.setContentsMargins(10, 10, 10, 10)
+        comments_layout.setSpacing(10)
+
+
+        # Лента комментариев
         self.comments_scroll = QScrollArea()
         self.comments_scroll.setWidgetResizable(True)
-        self.comments_scroll.setMaximumHeight(200)
+        self.comments_scroll.setFrameShape(QFrame.NoFrame)
+
+
         self.comments_container = QWidget()
-        self.comments_container_layout = QVBoxLayout(self.comments_container)
-        self.comments_container_layout.setContentsMargins(0, 0, 0, 0)
-        self.comments_container_layout.setSpacing(5)
-        self.comments_scroll.setWidget(self.comments_container)
-        self.comments_layout_inner.addWidget(self.comments_scroll)
-        
-        # Форма добавления комментария
-        comment_input_layout = QHBoxLayout()
+
+        self.comments_container_layout = QVBoxLayout(
+            self.comments_container
+        )
+
+        self.comments_container_layout.setContentsMargins(
+            0, 0, 0, 0
+        )
+
+        self.comments_container_layout.setSpacing(8)
+
+
+        self.comments_scroll.setWidget(
+            self.comments_container
+        )
+
+
+        # Минимальная высота
+        self.comments_scroll.setMinimumHeight(120)
+
+        # Максимальной высоты нет —
+        # блок будет расширяться
+        self.comments_scroll.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding
+        )
+
+
+        comments_layout.addWidget(
+            self.comments_scroll,
+            stretch=1
+        )
+
+
+        # Поле нового комментария
+
+        comment_bottom = QHBoxLayout()
+
+
         self.comment_edit = QTextEdit()
-        self.comment_edit.setObjectName("commentEdit")
-        self.comment_edit.setPlaceholderText("Введите комментарий...")
-        self.comment_edit.setMaximumHeight(60)
-        comment_input_layout.addWidget(self.comment_edit)
-        
-        send_comment_btn = QPushButton("Отправить")
-        send_comment_btn.setObjectName("sendCommentButton")
-        send_comment_btn.clicked.connect(self.send_comment)
-        comment_input_layout.addWidget(send_comment_btn)
-        
-        self.comments_layout_inner.addLayout(comment_input_layout)
-        content_layout.addWidget(comments_group)
+        self.comment_edit.setObjectName(
+            "commentEdit"
+        )
+
+        self.comment_edit.setPlaceholderText(
+            "Написать комментарий..."
+        )
+
+
+        self.comment_edit.setMinimumHeight(70)
+
+
+        comment_bottom.addWidget(
+            self.comment_edit,
+            stretch=1
+        )
+
+
+        send_comment_btn = QPushButton(
+            "Отправить"
+        )
+
+        send_comment_btn.setObjectName(
+            "sendCommentButton"
+        )
+
+
+        send_comment_btn.clicked.connect(
+            self.send_comment
+        )
+
+
+        comment_bottom.addWidget(
+            send_comment_btn
+        )
+
+
+        comments_layout.addLayout(
+            comment_bottom
+        )
+
+
+        content_layout.addWidget(
+            comments_group,
+            stretch=1
+        )
         
         # Файлы (заглушка)
         files_group = QGroupBox("Файлы")
@@ -1059,11 +1136,11 @@ class TaskDetailView(QWidget):
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
         
-        # Кнопка редактирования (показывается только если пользователь - исполнитель или автор)
-        self.edit_btn = QPushButton("✏ Редактировать")
-        self.edit_btn.setObjectName("editTaskButton")
-        self.edit_btn.clicked.connect(self.edit_task)
-        buttons_layout.addWidget(self.edit_btn)
+        # Кнопка сохранения изменений
+        self.save_btn = QPushButton("💾 Сохранить")
+        self.save_btn.setObjectName("saveTaskButton")
+        self.save_btn.clicked.connect(self.save_task)
+        buttons_layout.addWidget(self.save_btn)
         
         # Кнопка удаления (только если пользователь - автор)
         self.delete_btn = QPushButton("Удалить")
@@ -1168,13 +1245,31 @@ class TaskDetailView(QWidget):
             placeholder.setStyleSheet("color: gray; font-style: italic;")
             self.comments_container_layout.addWidget(placeholder)
         
-        self.comments_container_layout.addStretch()
+        self.comments_container_layout.addStretch(1)
+        
+        # Автоматическая прокрутка к последнему комментарию
+        QTimer.singleShot(
+            100,
+            lambda:
+                self.comments_scroll.verticalScrollBar()
+                .setValue(
+                    self.comments_scroll.verticalScrollBar()
+                    .maximum()
+                )
+        )
     
     def create_comment_widget(self, comment):
         """Создать виджет одного комментария."""
         frame = QFrame()
         frame.setObjectName("commentFrame")
-        frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        frame.setFrameStyle(QFrame.NoFrame)
+        frame.setStyleSheet("""
+QFrame#commentFrame {
+    background-color: #f7f8fa;
+    border-radius: 8px;
+    border: 1px solid #e1e4e8;
+}
+""")
         
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -1197,6 +1292,10 @@ class TaskDetailView(QWidget):
         text_label = QLabel(comment['text'])
         text_label.setWordWrap(True)
         text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        text_label.setStyleSheet("""
+font-size: 14px;
+color: #222;
+""")
         layout.addWidget(text_label)
         
         return frame
@@ -1216,18 +1315,46 @@ class TaskDetailView(QWidget):
         else:
             QMessageBox.critical(self, "Ошибка", "Не удалось добавить комментарий")
     
-    def edit_task(self):
-        """Открыть диалог редактирования задачи."""
+    def save_task(self):
+        """Сохранить изменения в задаче (редактирование на месте)."""
         if not self.task_data:
             return
         
-        dialog = TaskEditDialog(self.task_data, self.parent())
-        if dialog.exec() == QDialog.Accepted:
-            # Обновляем данные задачи после редактирования
-            self.task_data = dialog.get_updated_task_data()
-            # Эмитим сигнал об обновлении и возвращаемся к списку
+        title = self.title_edit.text().strip()
+        if not title:
+            QMessageBox.warning(self, "Ошибка", "Введите название задачи")
+            return
+        
+        description = self.desc_text.toPlainText().strip()
+        if len(description) < 10:
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                "Описание слишком короткое (минимум 10 символов)"
+            )
+            return
+        
+        try:
+            from db import update_task as db_update_task
+            success = db_update_task(
+                task_id=self.task_id,
+                title=title,
+                description=description
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось обновить задачу:\n{e}"
+            )
+            return
+        
+        if success:
+            QMessageBox.information(self, "Успех", "Задача успешно обновлена")
             self.taskUpdated.emit()
-            self.go_back()
+            self.load_task_data()
+        else:
+            QMessageBox.critical(self, "Ошибка", "Не удалось обновить задачу")
     
     def confirm_delete(self):
         """Подтверждение удаления задачи."""
