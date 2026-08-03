@@ -2,10 +2,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QFrame, QSplitter, QTextEdit, QLineEdit, QComboBox, QDateEdit,
     QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QStackedWidget,
-    QDialog, QGroupBox, QFormLayout, QSizePolicy
+    QDialog, QGroupBox, QFormLayout, QSizePolicy, QMenu, QApplication
 )
 from PySide6.QtCore import Qt, QDate, Signal, QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QClipboard
 
 from db import (
     get_all_employees_for_selector as db_get_all_employees_for_selector,
@@ -1240,9 +1240,42 @@ class TaskDetailView(QWidget):
         text_label.setWordWrap(True)
         text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         text_label.setObjectName("commentTextLabel")
+        
+        # Контекстное меню по правой кнопке мыши
+        text_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        text_label.customContextMenuRequested.connect(
+            lambda pos: self.show_comment_context_menu(pos, comment, text_label)
+        )
+        
         layout.addWidget(text_label)
         
         return frame
+    
+    def show_comment_context_menu(self, pos, comment, text_label):
+        """Показать контекстное меню для комментария."""
+        menu = QMenu(self)
+        
+        # Действие: Редактировать (только для автора)
+        if comment.get('author_id') == self.current_user_id:
+            edit_action = menu.addAction("Редактировать комментарий")
+            edit_action.triggered.connect(lambda: self.edit_comment(comment))
+        
+        # Действие: Копировать комментарий
+        copy_action = menu.addAction("Копировать комментарий")
+        copy_action.triggered.connect(lambda: self.copy_comment_text(comment['text']))
+        
+        # Действие: Удалить (только для автора)
+        if comment.get('author_id') == self.current_user_id:
+            delete_action = menu.addAction("Удалить комментарий")
+            delete_action.triggered.connect(lambda: self.remove_comment(comment))
+        
+        # Показать меню в позиции курсора относительно виджета
+        menu.exec_(text_label.mapToGlobal(pos))
+    
+    def copy_comment_text(self, text):
+        """Копировать текст комментария в буфер обмена."""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
     
     def send_comment(self):
         """Отправить комментарий."""
