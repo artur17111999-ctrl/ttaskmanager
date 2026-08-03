@@ -324,13 +324,17 @@ class MessageBubble(QFrame):
             area = area.parentWidget()
         
         # Определяем режим: есть ли выделенные сообщения
-        selection_mode = area and len(area.selected_messages) > 0
-        
-        if selection_mode:
-            # Во время режима выделения вообще не показываем меню
-            return
+        selection_mode = bool(area and area.selected_messages)
         
         menu = QMenu(self)
+        
+        if selection_mode:
+            menu.addAction(
+                "Снять выделение",
+                area.clear_selection
+            )
+            menu.exec(self.mapToGlobal(position))
+            return
         
         # обычное меню одного сообщения
         if self.is_own and not self.msg_data.get("is_deleted"):
@@ -342,7 +346,7 @@ class MessageBubble(QFrame):
                 )
             )
         
-        if not self.msg_data.get("is_deleted"):
+        if self.is_own and not self.msg_data.get("is_deleted"):
             menu.addAction(
                 "🗑 Удалить сообщение",
                 lambda: self.deleteRequested.emit(self.message_id)
@@ -352,7 +356,7 @@ class MessageBubble(QFrame):
         
         menu.addAction(
             "Выделить сообщение",
-            lambda: self.toggle_selection()
+            self.toggle_selection
         )
         
         menu.exec(self.mapToGlobal(position))
@@ -366,7 +370,16 @@ class MessageBubble(QFrame):
             # Проверяем, где произошёл клик, используя координаты относительно bubble
             bubble_rect = self.bubble.geometry()
             if bubble_rect.contains(event.pos()):
-                # Клик по пузырю сообщения - обычный клик, не выделяем
+                # Клик по пузырю сообщения
+                area = self.parentWidget()
+                while area and not isinstance(area, ChatMessagesArea):
+                    area = area.parentWidget()
+                
+                if area and area.selected_messages:
+                    # Если уже есть выделение - переключаем выделение этого сообщения
+                    self.toggle_selection()
+                    return
+                
                 super().mousePressEvent(event)
             else:
                 # Клик вне пузыря (слева от него) - выделяем сообщение
