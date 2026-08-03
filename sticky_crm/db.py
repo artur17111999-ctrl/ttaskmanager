@@ -1000,6 +1000,74 @@ def get_all_tags():
         conn.close()
 
 
+def get_all_statuses():
+    """Получить все статусы задач."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, code, title, color, sort_order FROM task_statuses ORDER BY sort_order")
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Ошибка получения статусов: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_all_priorities():
+    """Получить все приоритеты задач."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, code, title, color, sort_order FROM task_priorities ORDER BY sort_order")
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Ошибка получения приоритетов: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_status_by_code(code):
+    """Получить статус по коду."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, code, title, color FROM task_statuses WHERE code = %s", (code,))
+        return cursor.fetchone()
+    except Exception as e:
+        print(f"Ошибка получения статуса: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_priority_by_code(code):
+    """Получить приоритет по коду."""
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, code, title, color FROM task_priorities WHERE code = %s", (code,))
+        return cursor.fetchone()
+    except Exception as e:
+        print(f"Ошибка получения приоритета: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def create_tag(name, color="#808080"):
     """Создать новый тег."""
     conn = get_connection()
@@ -1023,19 +1091,26 @@ def create_tag(name, color="#808080"):
         conn.close()
 
 
-def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id):
+def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id, status_id=None, priority_id=None):
     """Создать новую задачу."""
     conn = get_connection()
     if not conn:
         return None
     try:
         cursor = conn.cursor()
-        # Создаем задачу
-        cursor.execute("""
-            INSERT INTO tasks (title, description, author_id, executor_id, deadline, priority, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (title, description, author_id, executor_id, deadline, priority, creator_id))
+        # Создаем задачу - поддерживаем как старый формат (priority как текст), так и новый (priority_id)
+        if priority_id is not None:
+            cursor.execute("""
+                INSERT INTO tasks (title, description, author_id, executor_id, deadline, priority_id, created_by, status_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (title, description, author_id, executor_id, deadline, priority_id, creator_id, status_id))
+        else:
+            cursor.execute("""
+                INSERT INTO tasks (title, description, author_id, executor_id, deadline, priority, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (title, description, author_id, executor_id, deadline, priority, creator_id))
         task_id = cursor.fetchone()[0]
         
         # Добавляем наблюдателей
@@ -1063,7 +1138,7 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
         conn.close()
 
 
-def update_task(task_id, title=None, description=None, executor_id=None, status=None, priority=None, deadline=None, observers_ids=None, tag_ids=None):
+def update_task(task_id, title=None, description=None, executor_id=None, status=None, priority=None, deadline=None, observers_ids=None, tag_ids=None, status_id=None, priority_id=None):
     """Обновить задачу. Параметры могут быть None для частичного обновления."""
     conn = get_connection()
     if not conn:
@@ -1084,12 +1159,20 @@ def update_task(task_id, title=None, description=None, executor_id=None, status=
         if executor_id is not None:
             updates.append("executor_id=%s")
             params.append(executor_id)
+        # Поддерживаем как старый формат (status как текст), так и новый (status_id)
         if status is not None:
             updates.append("status=%s")
             params.append(status)
+        if status_id is not None:
+            updates.append("status_id=%s")
+            params.append(status_id)
+        # Поддерживаем как старый формат (priority как текст), так и новый (priority_id)
         if priority is not None:
             updates.append("priority=%s")
             params.append(priority)
+        if priority_id is not None:
+            updates.append("priority_id=%s")
+            params.append(priority_id)
         if deadline is not None:
             updates.append("deadline=%s")
             params.append(deadline)
@@ -1308,7 +1391,7 @@ def get_task_detail(task_id):
     try:
         cursor = conn.cursor()
         
-        # Основная информация
+        # Основная информация - получаем как старые поля, так и новые из связанных таблиц
         cursor.execute("""
             SELECT 
                 t.id,
@@ -1320,11 +1403,19 @@ def get_task_detail(task_id):
                 t.created_at,
                 a.last_name || ' ' || a.first_name as author_name,
                 e.last_name || ' ' || e.first_name as executor_name,
-                c.last_name || ' ' || c.first_name as creator_name
+                c.last_name || ' ' || c.first_name as creator_name,
+                ts.code as status_code,
+                ts.title as status_title,
+                ts.color as status_color,
+                tp.code as priority_code,
+                tp.title as priority_title,
+                tp.color as priority_color
             FROM tasks t
             JOIN employees a ON t.author_id = a.id
             JOIN employees e ON t.executor_id = e.id
             JOIN employees c ON t.created_by = c.id
+            LEFT JOIN task_statuses ts ON t.status_id = ts.id
+            LEFT JOIN task_priorities tp ON t.priority_id = tp.id
             WHERE t.id = %s
         """, (task_id,))
         
@@ -1332,12 +1423,17 @@ def get_task_detail(task_id):
         if not row:
             return None
         
+        # Используем данные из связанных таблиц статусов/приоритетов если они есть, иначе старые поля
         task = {
             'id': row[0],
             'title': row[1],
             'description': row[2],
-            'status': row[3],
-            'priority': row[4],
+            'status': row[11] if row[11] else row[3],  # status_title или status
+            'status_code': row[10] if row[10] else None,  # status_code
+            'status_color': row[12] if row[12] else None,  # status_color
+            'priority': row[14] if row[14] else row[4],  # priority_title или priority
+            'priority_code': row[13] if row[13] else None,  # priority_code
+            'priority_color': row[15] if row[15] else None,  # priority_color
             'deadline': row[5],
             'created_at': row[6],
             'author_name': row[7],

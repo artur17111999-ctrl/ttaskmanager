@@ -10,6 +10,8 @@ from PySide6.QtGui import QColor, QClipboard
 from db import (
     get_all_employees_for_selector as db_get_all_employees_for_selector,
     get_all_tags as db_get_all_tags,
+    get_all_statuses as db_get_all_statuses,
+    get_all_priorities as db_get_all_priorities,
     create_tag as db_create_tag,
     create_task as db_create_task,
     get_tasks as db_get_tasks,
@@ -25,6 +27,8 @@ from db import (
 TAG_COLOR_ROLE = Qt.UserRole + 1
 EMPLOYEE_ID_ROLE = Qt.UserRole
 TAG_ID_ROLE = Qt.UserRole + 2
+STATUS_ID_ROLE = Qt.UserRole + 3
+PRIORITY_ID_ROLE = Qt.UserRole + 4
 
 
 class TaskCreatorWidget(QWidget):
@@ -40,6 +44,8 @@ class TaskCreatorWidget(QWidget):
         self.init_ui()
         self.load_employees()
         self.load_tags()
+        self.load_statuses()
+        self.load_priorities()
     
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -119,6 +125,18 @@ class TaskCreatorWidget(QWidget):
         self.executor_combo.setObjectName("executorCombo")
         right_layout.addWidget(self.executor_combo)
         
+        # Статус
+        right_layout.addWidget(QLabel("Статус:"))
+        self.status_combo = QComboBox()
+        self.status_combo.setObjectName("statusCombo")
+        right_layout.addWidget(self.status_combo)
+        
+        # Приоритет
+        right_layout.addWidget(QLabel("Приоритет:"))
+        self.priority_combo = QComboBox()
+        self.priority_combo.setObjectName("priorityCombo")
+        right_layout.addWidget(self.priority_combo)
+        
         # Наблюдатели
         right_layout.addWidget(QLabel("Наблюдатели:"))
         self.observers_list = QListWidget()
@@ -157,13 +175,6 @@ class TaskCreatorWidget(QWidget):
         self.deadline_edit.setMinimumDate(QDate.currentDate())
         self.deadline_edit.setDate(QDate.currentDate().addDays(7))
         right_layout.addWidget(self.deadline_edit)
-        
-        # Критичность
-        right_layout.addWidget(QLabel("Уровень критичности:"))
-        self.priority_combo = QComboBox()
-        self.priority_combo.setObjectName("priorityCombo")
-        self.priority_combo.addItems(["Низкий", "Средний", "Критичный", "Блокер"])
-        right_layout.addWidget(self.priority_combo)
         
         right_layout.addStretch()
         
@@ -214,30 +225,42 @@ class TaskCreatorWidget(QWidget):
             item.setCheckState(Qt.Unchecked)
             self.observers_list.addItem(item)
     
-    def load_tags(self):
-        """Загрузить существующие теги."""
+    def load_statuses(self):
+        """Загрузить список статусов."""
         try:
-            tags = db_get_all_tags()
+            statuses = db_get_all_statuses()
         except Exception as e:
             QMessageBox.critical(
                 self,
                 "Ошибка",
-                f"Не удалось загрузить теги:\n{e}"
+                f"Не удалось загрузить статусы:\n{e}"
             )
             return
         
-        self.tags_list.clear()
+        self.status_combo.clear()
         
-        for tag in tags:
-            item = QListWidgetItem(f"{tag[1]}")
-            item.setData(TAG_ID_ROLE, tag[0])
-            item.setData(TAG_COLOR_ROLE, tag[2])  # цвет
-            
-            # Применяем цвет тега
-            if tag[2]:
-                item.setForeground(QColor(tag[2]))
-            
-            self.tags_list.addItem(item)
+        for status in statuses:
+            # status: (id, code, title, color, sort_order)
+            self.status_combo.addItem(status[2], status[0])  # title, id
+            # Устанавливаем цвет для элемента комбобокса (можно через delegate, но пока просто текст)
+    
+    def load_priorities(self):
+        """Загрузить список приоритетов."""
+        try:
+            priorities = db_get_all_priorities()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить приоритеты:\n{e}"
+            )
+            return
+        
+        self.priority_combo.clear()
+        
+        for priority in priorities:
+            # priority: (id, code, title, color, sort_order)
+            self.priority_combo.addItem(priority[2], priority[0])  # title, id
     
     def create_new_tag(self):
         """Создать новый тег."""
@@ -266,6 +289,31 @@ class TaskCreatorWidget(QWidget):
             self.new_tag_edit.clear()
         else:
             QMessageBox.warning(self, "Ошибка", "Не удалось создать тег")
+    
+    def load_tags(self):
+        """Загрузить существующие теги."""
+        try:
+            tags = db_get_all_tags()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить теги:\n{e}"
+            )
+            return
+        
+        self.tags_list.clear()
+        
+        for tag in tags:
+            item = QListWidgetItem(f"{tag[1]}")
+            item.setData(TAG_ID_ROLE, tag[0])
+            item.setData(TAG_COLOR_ROLE, tag[2])  # цвет
+            
+            # Применяем цвет тега
+            if tag[2]:
+                item.setForeground(QColor(tag[2]))
+            
+            self.tags_list.addItem(item)
     
     def create_task(self):
         """Создать задачу."""
@@ -320,8 +368,10 @@ class TaskCreatorWidget(QWidget):
         for item in self.tags_list.selectedItems():
             selected_tag_ids.append(item.data(TAG_ID_ROLE))
         
+        # Получаем статус и приоритет (ID)
+        status_id = self.status_combo.currentData()
+        priority_id = self.priority_combo.currentData()
         deadline = self.deadline_edit.date().toString("yyyy-MM-dd")
-        priority = self.priority_combo.currentText()
         
         try:
             task_id = db_create_task(
@@ -331,9 +381,11 @@ class TaskCreatorWidget(QWidget):
                 executor_id=executor_id,
                 observers_ids=observers_ids,
                 deadline=deadline,
-                priority=priority,
+                priority=None,  # Старое поле больше не используется
                 tag_ids=selected_tag_ids,
-                creator_id=self.current_user_id
+                creator_id=self.current_user_id,
+                status_id=status_id,
+                priority_id=priority_id
             )
         except Exception as e:
             QMessageBox.critical(
@@ -576,6 +628,8 @@ class TaskEditDialog(QDialog):
         self.init_ui()
         self.load_employees()
         self.load_tags()
+        self.load_statuses()
+        self.load_priorities()
     
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -623,22 +677,14 @@ class TaskEditDialog(QDialog):
         self.executor_combo = QComboBox()
         info_layout.addRow("Исполнитель:", self.executor_combo)
         
-        # Статус
+        # Статус - будет заполнен в load_statuses
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["Новая", "В работе", "На проверке", "Завершена", "Отменена"])
-        current_status = self.task_data.get('status', 'Новая')
-        status_index = self.status_combo.findText(current_status)
-        if status_index >= 0:
-            self.status_combo.setCurrentIndex(status_index)
+        self.status_combo.setObjectName("statusCombo")
         info_layout.addRow("Статус:", self.status_combo)
         
-        # Приоритет
+        # Приоритет - будет заполнен в load_priorities
         self.priority_combo = QComboBox()
-        self.priority_combo.addItems(["Низкий", "Средний", "Критичный", "Блокер"])
-        current_priority = self.task_data.get('priority', 'Средний')
-        priority_index = self.priority_combo.findText(current_priority)
-        if priority_index >= 0:
-            self.priority_combo.setCurrentIndex(priority_index)
+        self.priority_combo.setObjectName("priorityCombo")
         info_layout.addRow("Приоритет:", self.priority_combo)
         
         # Дедлайн
@@ -751,6 +797,62 @@ class TaskEditDialog(QDialog):
             if item.text() in current_observers:
                 item.setCheckState(Qt.Checked)
     
+    def load_statuses(self):
+        """Загрузить список статусов."""
+        try:
+            statuses = db_get_all_statuses()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить статусы:\n{e}"
+            )
+            return
+        
+        self.status_combo.clear()
+        
+        current_status = self.task_data.get('status', '')
+        current_status_code = self.task_data.get('status_code', '')
+        selected_index = -1
+        
+        for i, status in enumerate(statuses):
+            # status: (id, code, title, color, sort_order)
+            self.status_combo.addItem(status[2], status[0])  # title, id
+            # Выбираем текущий статус
+            if status[1] == current_status_code or status[2] == current_status:
+                selected_index = i
+        
+        if selected_index >= 0:
+            self.status_combo.setCurrentIndex(selected_index)
+    
+    def load_priorities(self):
+        """Загрузить список приоритетов."""
+        try:
+            priorities = db_get_all_priorities()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не удалось загрузить приоритеты:\n{e}"
+            )
+            return
+        
+        self.priority_combo.clear()
+        
+        current_priority = self.task_data.get('priority', '')
+        current_priority_code = self.task_data.get('priority_code', '')
+        selected_index = -1
+        
+        for i, priority in enumerate(priorities):
+            # priority: (id, code, title, color, sort_order)
+            self.priority_combo.addItem(priority[2], priority[0])  # title, id
+            # Выбираем текущий приоритет
+            if priority[1] == current_priority_code or priority[2] == current_priority:
+                selected_index = i
+        
+        if selected_index >= 0:
+            self.priority_combo.setCurrentIndex(selected_index)
+    
     def load_tags(self):
         """Загрузить существующие теги."""
         try:
@@ -831,8 +933,9 @@ class TaskEditDialog(QDialog):
             QMessageBox.warning(self, "Ошибка", "Выберите исполнителя")
             return
         
-        status = self.status_combo.currentText()
-        priority = self.priority_combo.currentText()
+        # Получаем ID статуса и приоритета
+        status_id = self.status_combo.currentData()
+        priority_id = self.priority_combo.currentData()
         deadline = self.deadline_edit.date().toString("yyyy-MM-dd")
         
         # Получаем наблюдателей
@@ -853,11 +956,13 @@ class TaskEditDialog(QDialog):
                 title=title,
                 description=description,
                 executor_id=executor_id,
-                status=status,
-                priority=priority,
+                status=None,  # Старое поле больше не используется
+                priority=None,  # Старое поле больше не используется
                 deadline=deadline,
                 observers_ids=observers_ids,
-                tag_ids=selected_tag_ids
+                tag_ids=selected_tag_ids,
+                status_id=status_id,
+                priority_id=priority_id
             )
         except Exception as e:
             QMessageBox.critical(
@@ -873,8 +978,10 @@ class TaskEditDialog(QDialog):
                 'title': title,
                 'description': description,
                 'executor_name': self.executor_combo.currentText(),
-                'status': status,
-                'priority': priority,
+                'status': self.status_combo.currentText(),
+                'status_code': self.status_combo.currentData(),
+                'priority': self.priority_combo.currentText(),
+                'priority_code': self.priority_combo.currentData(),
                 'deadline': deadline,
                 'observers': [self.observers_list.item(i).text() 
                              for i in range(self.observers_list.count()) 
