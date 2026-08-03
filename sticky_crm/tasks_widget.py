@@ -577,14 +577,14 @@ class TasksWidget(QWidget):
         card.setObjectName("taskCard")
         card.setStyleSheet("""
             QFrame#taskCard {
-                background-color: white;
-                border: 1px solid #e0e0e0;
+                background-color: #2d2d2d;
+                border: 1px solid #404040;
                 border-radius: 8px;
                 padding: 15px;
             }
             QFrame#taskCard:hover {
                 border: 1px solid #0078d4;
-                background-color: #f5f9ff;
+                background-color: #383838;
             }
         """)
         
@@ -595,7 +595,7 @@ class TasksWidget(QWidget):
         header_layout = QHBoxLayout()
         
         title_label = QLabel(task_data['title'])
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
         header_layout.addWidget(title_label)
         
         # Приоритет
@@ -628,7 +628,7 @@ class TasksWidget(QWidget):
             desc = desc[:150] + "..."
         
         desc_label = QLabel(desc)
-        desc_label.setStyleSheet("color: #666; font-size: 14px;")
+        desc_label.setStyleSheet("color: #cccccc; font-size: 14px;")
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
         
@@ -636,18 +636,18 @@ class TasksWidget(QWidget):
         info_layout = QHBoxLayout()
         
         executor_label = QLabel(f"👤 {task_data['executor_name']}")
-        executor_label.setStyleSheet("color: #555; font-size: 13px;")
+        executor_label.setStyleSheet("color: #aaaaaa; font-size: 13px;")
         info_layout.addWidget(executor_label)
         
         if task_data['deadline']:
             deadline_label = QLabel(f"📅 {task_data['deadline']}")
-            deadline_label.setStyleSheet("color: #555; font-size: 13px;")
+            deadline_label.setStyleSheet("color: #aaaaaa; font-size: 13px;")
             info_layout.addWidget(deadline_label)
         
         info_layout.addStretch()
         
         author_label = QLabel(f"Автор: {task_data['author_name']}")
-        author_label.setStyleSheet("color: #888; font-size: 12px;")
+        author_label.setStyleSheet("color: #888888; font-size: 12px;")
         info_layout.addWidget(author_label)
         
         layout.addLayout(info_layout)
