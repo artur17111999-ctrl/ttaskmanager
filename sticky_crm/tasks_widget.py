@@ -47,14 +47,15 @@ class TaskCreatorWidget(QWidget):
         back_btn.setMinimumWidth(120)
         back_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
+                background-color: #e0e0e0;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 font-size: 14px;
                 padding: 8px 15px;
+                color: #333333;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #d0d0d0;
             }
         """)
         header_layout.addWidget(back_btn)
@@ -64,7 +65,7 @@ class TaskCreatorWidget(QWidget):
         
         header_label = QLabel("Создание новой задачи")
         header_label.setObjectName("taskHeaderLabel")
-        header_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
+        header_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
         header_layout.addWidget(header_label)
         
         header_layout.addStretch()
@@ -131,13 +132,14 @@ class TaskCreatorWidget(QWidget):
         attach_btn.clicked.connect(self.attach_file)
         attach_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
+                background-color: #e0e0e0;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 padding: 8px 15px;
+                color: #333333;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #d0d0d0;
             }
         """)
         files_layout.addWidget(attach_btn)
@@ -286,13 +288,14 @@ class TaskCreatorWidget(QWidget):
         back_btn_bottom.setMinimumWidth(120)
         back_btn_bottom.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
+                background-color: #e0e0e0;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 font-size: 14px;
+                color: #333333;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #d0d0d0;
             }
         """)
         buttons_layout.addWidget(back_btn_bottom)
@@ -305,13 +308,14 @@ class TaskCreatorWidget(QWidget):
         cancel_btn.setMinimumWidth(120)
         cancel_btn.setStyleSheet("""
             QPushButton {
-                background-color: #f0f0f0;
+                background-color: #e0e0e0;
                 border: 1px solid #ccc;
                 border-radius: 4px;
                 font-size: 14px;
+                color: #333333;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
+                background-color: #d0d0d0;
             }
         """)
         buttons_layout.addWidget(cancel_btn)
