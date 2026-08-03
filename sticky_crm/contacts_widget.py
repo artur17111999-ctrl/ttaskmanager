@@ -518,6 +518,9 @@ class ContactsWidget(QWidget):
         mark_notifications_as_read(self.current_user_id, chat_id)
         mark_messages_as_read(chat_id, self.current_user_id)
 
+        # Очищаем поле ввода при переключении чата
+        self.message_input.clear()
+
         self.current_chat_id = chat_id
         self.current_chat_name = name
         self.current_chat_type = chat_type
@@ -531,6 +534,12 @@ class ContactsWidget(QWidget):
         if area.messages_layout.count() > 0:
             self.chat_stack.setCurrentWidget(area)
             self.highlight_current_chat()
+            # Обновляем last_message_id для кэшированной области
+            messages = get_chat_messages(self.current_chat_id)
+            if messages:
+                self.last_message_id = messages[-1]['id']
+            else:
+                self.last_message_id = 0
             return
 
         # Первый раз – загружаем сообщения
