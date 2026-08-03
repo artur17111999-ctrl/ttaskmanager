@@ -335,11 +335,11 @@ class MessageBubble(QFrame):
         
         if selection_mode:
             # Режим множественного выделения
-            menu.addAction("🗑 Удалить выделенные",
-                           lambda: self._delete_selected_from_menu(parent_widget))
-            
             menu.addAction("✉ Переслать выделенные",
                            lambda: self._forward_selected_from_menu(parent_widget))
+            
+            menu.addAction("🗑 Удалить выделенные",
+                           lambda: self._delete_selected_from_menu(parent_widget))
             
             menu.addSeparator()
             
@@ -384,11 +384,8 @@ class MessageBubble(QFrame):
             super().mousePressEvent(event)
             return
         elif event.button() == Qt.LeftButton:
-            # Проверяем, где произошёл клик
-            # Получаем позицию клика относительно bubble
-            pos_in_bubble = self.bubble.mapFromGlobal(self.mapToGlobal(event.pos()))
-            
-            if self.bubble.rect().contains(pos_in_bubble):
+            # Проверяем, где произошёл клик, используя координаты относительно bubble
+            if self.bubble.geometry().contains(event.pos()):
                 # Клик по пузырю сообщения - обычный клик, не выделяем
                 super().mousePressEvent(event)
             else:
@@ -1083,7 +1080,8 @@ class ContactsWidget(QWidget):
                 if bubble:
                     area.messages_layout.removeWidget(bubble)
                     bubble.deleteLater()
-            area.selected_messages.clear()
+            # Используем clear_selection() вместо простого clear(), чтобы снять выделение визуально
+            area.clear_selection()
             self.hide_action_buttons()
 
     def forward_selected_messages(self):
