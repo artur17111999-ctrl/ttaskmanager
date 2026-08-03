@@ -20,6 +20,7 @@ from PySide6.QtCore import (
 )
 
 from contacts_widget import ContactsWidget
+from tasks_widget import TasksWidget
 from db import get_unread_notification_count, get_notifications, mark_notifications_as_read
 
 
@@ -67,7 +68,7 @@ class MainWindow(QMainWindow):
 
         menu_data = [
             ("👥  Контакты", 1, "Контакты"),
-            ("✓  Задачи", 0, "Задачи"),
+            ("✓  Задачи", 2, "Задачи"),
             ("📅  Календарь", 0, "Календарь"),
             ("📄  Документы", 0, "Документы"),
             ("📊  Отчёты", 0, "Отчёты"),
@@ -131,6 +132,12 @@ class MainWindow(QMainWindow):
 
         self.contacts_page = ContactsWidget(current_user_id=self.user_data['employee_id'])
         self.content_area.addWidget(self.contacts_page)
+
+        self.tasks_page = TasksWidget(
+            current_user_id=self.user_data['employee_id'],
+            current_user_name=self.user_data['full_name']
+        )
+        self.content_area.addWidget(self.tasks_page)
 
         right_layout.addWidget(self.content_area, 1)
 
