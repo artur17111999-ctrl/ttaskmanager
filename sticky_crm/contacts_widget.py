@@ -231,6 +231,7 @@ class ChatMessagesArea(QScrollArea):
         self.layout.setContentsMargins(12, 12, 12, 12)
         self.layout.setSpacing(4)
         self.setWidget(container)
+        self._last_date = None
 
     def replace_messages(self, messages, user_id, connect_bubble):
         self.clear()
@@ -240,6 +241,7 @@ class ChatMessagesArea(QScrollArea):
     def clear(self):
         self.selected_ids.clear()
         self.bubbles.clear()
+        self._last_date = None
         while self.layout.count():
             item = self.layout.takeAt(0)
             if item.widget():
@@ -250,11 +252,34 @@ class ChatMessagesArea(QScrollArea):
         if message["id"] in self.bubbles:
             self.bubbles[message["id"]].refresh(message)
             return
+        message_date = self._message_date(message)
+        if message_date is not None and message_date != self._last_date:
+            self._add_date_separator(message_date)
+            self._last_date = message_date
         bubble = MessageBubble(message, message["sender_id"] == user_id)
         connect_bubble(bubble)
         bubble.selectionChanged.connect(self._selection_changed)
         self.bubbles[bubble.message_id] = bubble
         self.layout.addWidget(bubble)
+
+    @staticmethod
+    def _message_date(message):
+        created_at = message.get("created_at")
+        if hasattr(created_at, "date"):
+            return created_at.date()
+        return None
+
+    def _add_date_separator(self, message_date):
+        label = QLabel(objectName="dateSeparator")
+        if message_date == datetime.now().date():
+            text = "Сегодня"
+        elif message_date:
+            text = message_date.strftime("%d.%m.%Y")
+        else:
+            text = ""
+        label.setText(text)
+        label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(label)
 
     def update(self, messages, user_id, connect_bubble):
         current_ids = {message["id"] for message in messages}

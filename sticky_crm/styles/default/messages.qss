@@ -13,6 +13,14 @@ QLabel#statusIcon { color: #93c5fd; }
 QLabel#messageText[deleted="true"] { color: #94a3b8; font-style: italic; }
 QLabel#editedLabel { color: #b5cfdf; font-size: 8pt; }
 QLabel#statusIcon[read="true"] { color: #7dd3fc; }
+QLabel#dateSeparator {
+    color: #8fa3b8;
+    font-size: 8pt;
+    padding: 6px 18px;
+    margin: 8px 24px;
+    border-top: 1px solid #334155;
+    border-bottom: 1px solid #334155;
+}
 
 QLineEdit#editInput { background: #0f172a; border: 1px solid #3b82f6; border-radius: 10px; color: #f8fafc; padding: 8px; }
 #inputFrame, #screenshotPreview { background: #172033; }

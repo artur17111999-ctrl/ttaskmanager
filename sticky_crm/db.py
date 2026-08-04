@@ -470,6 +470,7 @@ def get_chat_messages(chat_id, limit=50, offset=0, order_desc=False):
                 'sender_id': row[1],
                 'sender_name': row[2],
                 'text': row[3],
+                'created_at': row[4],
                 'time': row[4].strftime("%H:%M") if row[4] else "",
                 'is_read': row[5],
                 'is_deleted': row[6],
@@ -513,7 +514,8 @@ def search_chat_messages(chat_id, query, limit=500):
         """, (chat_id, f"%{query}%", f"%{query}%", f"%{query}%", limit))
         return [{
             'id': row[0], 'sender_id': row[1], 'sender_name': row[2],
-            'text': row[3], 'time': row[4].strftime('%H:%M') if row[4] else '',
+            'text': row[3], 'created_at': row[4],
+            'time': row[4].strftime('%H:%M') if row[4] else '',
             'is_read': row[5], 'is_deleted': row[6],
             'edited_at': row[7].strftime('%H:%M') if row[7] else None,
             'is_forwarded': row[8], 'forwarded_from': row[9],
@@ -1022,6 +1024,7 @@ def get_new_messages(chat_id, last_id):
                 'sender_id': row[1],
                 'sender_name': row[2],
                 'text': row[3],
+                'created_at': row[4],
                 'time': row[4].strftime("%H:%M") if row[4] else "",
                 'is_read': row[5],
                 'is_deleted': row[6],
