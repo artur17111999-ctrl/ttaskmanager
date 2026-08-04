@@ -21,9 +21,13 @@ def _ensure_stickies_table(cursor):
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )""")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_stickies_user ON stickies(user_id)")
+    cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS pos_x INTEGER")
+    cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS pos_y INTEGER")
+    cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS width INTEGER NOT NULL DEFAULT 340")
+    cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS height INTEGER NOT NULL DEFAULT 274")
 
 
-def create_sticky(user_id, source_type, source_id, title, text, color='#fef3a5', pin_mode='bottom_movable'):
+def create_sticky(user_id, source_type, source_id, title, text, color='#fef3a5', pin_mode='bottom_movable', geometry=None):
     conn = get_connection()
     if not conn:
         return None
@@ -31,10 +35,11 @@ def create_sticky(user_id, source_type, source_id, title, text, color='#fef3a5',
     try:
         cursor = conn.cursor()
         _ensure_stickies_table(cursor)
+        x, y, width, height = geometry or (None, None, 340, 274)
         cursor.execute("""INSERT INTO stickies
-            (user_id, source_type, source_id, title, text, color, pin_mode)
-            VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (user_id, source_type, source_id, title or '', text or '', color, pin_mode))
+            (user_id, source_type, source_id, title, text, color, pin_mode, pos_x, pos_y, width, height)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (user_id, source_type, source_id, title or '', text or '', color, pin_mode, x, y, width, height))
         sticky_id = cursor.fetchone()[0]
         conn.commit()
         return sticky_id
@@ -47,7 +52,7 @@ def create_sticky(user_id, source_type, source_id, title, text, color='#fef3a5',
         conn.close()
 
 
-def update_sticky(sticky_id, user_id, title, text, color, pin_mode):
+def update_sticky(sticky_id, user_id, title, text, color, pin_mode, geometry=None):
     conn = get_connection()
     if not conn:
         return False
@@ -55,9 +60,11 @@ def update_sticky(sticky_id, user_id, title, text, color, pin_mode):
     try:
         cursor = conn.cursor()
         _ensure_stickies_table(cursor)
+        x, y, width, height = geometry or (None, None, 340, 274)
         cursor.execute("""UPDATE stickies SET title=%s,text=%s,color=%s,pin_mode=%s,
-            updated_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s""",
-            (title or '', text or '', color, pin_mode, sticky_id, user_id))
+            pos_x=%s,pos_y=%s,width=%s,height=%s,updated_at=CURRENT_TIMESTAMP
+            WHERE id=%s AND user_id=%s""",
+            (title or '', text or '', color, pin_mode, x, y, width, height, sticky_id, user_id))
         conn.commit()
         return cursor.rowcount > 0
     except Exception as error:
@@ -76,10 +83,11 @@ def get_user_stickies(user_id):
     try:
         cursor = conn.cursor()
         _ensure_stickies_table(cursor)
-        cursor.execute("""SELECT id, source_type, source_id, title, text, color, pin_mode
+        cursor.execute("""SELECT id, source_type, source_id, title, text, color, pin_mode, pos_x, pos_y, width, height
             FROM stickies WHERE user_id=%s ORDER BY updated_at DESC""", (user_id,))
         result = [{'id': r[0], 'source_type': r[1], 'source_id': r[2], 'title': r[3],
-                 'text': r[4], 'color': r[5], 'pin_mode': r[6]} for r in cursor.fetchall()]
+                 'text': r[4], 'color': r[5], 'pin_mode': r[6], 'pos_x': r[7], 'pos_y': r[8],
+                 'width': r[9], 'height': r[10]} for r in cursor.fetchall()]
         conn.commit()
         return result
     finally:

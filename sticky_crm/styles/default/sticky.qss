@@ -19,6 +19,8 @@ QFrame#stickyNote QLineEdit#stickyTitle {
     font-weight: 500;
     min-width: 112px;
     max-width: 150px;
+    color: #111111;
+    selection-color: #111111;
 }
 QFrame#stickyNote QComboBox, QFrame#stickyNote QPushButton {
     background: rgba(0, 0, 0, 0.14);
@@ -34,6 +36,8 @@ QFrame#stickyNote QTextEdit#stickyText {
     border: none;
     padding: 8px 10px;
     selection-background-color: rgba(80, 40, 0, 0.22);
+    color: #111111;
+    selection-color: #111111;
 }
 QFrame#stickyNote QLabel#stickySource {
     padding: 4px 10px;
@@ -45,9 +49,6 @@ QFrame#stickyNote QPushButton#stickySave, QFrame#stickyNote QPushButton#stickyCl
     min-width: 32px; max-width: 32px;
     min-height: 30px; max-height: 30px;
     padding: 0;
-    font-size: 21px;
-    font-weight: 600;
-    text-align: center;
 }
 QFrame#stickyNote QPushButton#stickyMinimize {
     min-width: 32px; max-width: 32px;
@@ -60,6 +61,7 @@ QFrame#stickyNote QPushButton#stickySave,
 QFrame#stickyNote QPushButton#stickyMinimize,
 QFrame#stickyNote QPushButton#stickyClose { margin-left: 0; }
 QFrame#stickyNote QPushButton#stickyLevel { min-width: 52px; max-width: 52px; min-height: 28px; max-height: 28px; font-size: 13px; }
+QFrame#stickyNote QPushButton#stickyLevel { color: #111111; }
 QFrame#stickyHeader { background: rgba(0,0,0,0.10); border-bottom: 1px solid rgba(0,0,0,0.15); border-radius: 4px 4px 0 0; }
 QFrame#stickyFooter { background: rgba(0,0,0,0.08); border-top: 1px solid rgba(0,0,0,0.12); border-radius: 0 0 4px 4px; }
 QFrame#stickyNote QPushButton#stickyClose { background: #ff6b6b; color: white; }
