@@ -20,6 +20,7 @@ from db import (
     search_chat_messages, send_message, unpin_chat,
 )
 from screenshot_attachments import ScreenshotPreview, ScreenshotTextEdit, add_image_previews
+from sticky_notes import open_sticky
 
 
 class UnreadBadgeDelegate(QStyledItemDelegate):
@@ -115,6 +116,7 @@ class MessageBubble(QFrame):
     editRequested = Signal(int, str)
     deleteRequested = Signal(int)
     selectionChanged = Signal(int, bool)
+    stickyRequested = Signal(int, str)
 
     def __init__(self, message, own, parent=None):
         super().__init__(parent)
@@ -194,6 +196,9 @@ class MessageBubble(QFrame):
             menu.addSeparator()
         choose = menu.addAction("Снять выделение" if self.selected else "Выделить")
         choose.triggered.connect(self.toggle_selected)
+        menu.addSeparator()
+        sticky = menu.addAction("Создать стик")
+        sticky.triggered.connect(lambda: self.stickyRequested.emit(self.message_id, self.message.get("text") or ""))
         menu.exec(self.mapToGlobal(_position))
 
     def mousePressEvent(self, event):
@@ -512,6 +517,10 @@ class ContactsWidget(QWidget):
     def _connect_bubble(self, bubble):
         bubble.editRequested.connect(self._start_edit)
         bubble.deleteRequested.connect(self.delete_one)
+        bubble.stickyRequested.connect(self._create_message_sticky)
+
+    def _create_message_sticky(self, message_id, text):
+        open_sticky(self, self.current_user_id, 'message', message_id, 'Сообщение', text)
 
     def refresh(self):
         if not self.current_chat_id or self._editing_bubble or self._message_filter:

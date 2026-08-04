@@ -9,6 +9,7 @@ from theme_manager import ThemeManager
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Sticky CRM")
+    app.setQuitOnLastWindowClosed(False)
     app.setStyle("Fusion")
 
     # Загружаем тему (QSS из папки styles/default)

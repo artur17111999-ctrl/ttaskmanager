@@ -7,6 +7,100 @@ from psycopg2 import Binary
 from datetime import datetime
 from config import DB_CONFIG
 
+def _ensure_stickies_table(cursor):
+    cursor.execute("""CREATE TABLE IF NOT EXISTS stickies (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        source_type VARCHAR(20) NOT NULL,
+        source_id INTEGER NOT NULL,
+        title VARCHAR(255) NOT NULL DEFAULT '',
+        text TEXT NOT NULL DEFAULT '',
+        color VARCHAR(20) NOT NULL DEFAULT '#fef3a5',
+        pin_mode VARCHAR(30) NOT NULL DEFAULT 'bottom_movable',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )""")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_stickies_user ON stickies(user_id)")
+
+
+def create_sticky(user_id, source_type, source_id, title, text, color='#fef3a5', pin_mode='bottom_movable'):
+    conn = get_connection()
+    if not conn:
+        return None
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_stickies_table(cursor)
+        cursor.execute("""INSERT INTO stickies
+            (user_id, source_type, source_id, title, text, color, pin_mode)
+            VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (user_id, source_type, source_id, title or '', text or '', color, pin_mode))
+        sticky_id = cursor.fetchone()[0]
+        conn.commit()
+        return sticky_id
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка создания стика: {error}")
+        return None
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+def update_sticky(sticky_id, user_id, title, text, color, pin_mode):
+    conn = get_connection()
+    if not conn:
+        return False
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_stickies_table(cursor)
+        cursor.execute("""UPDATE stickies SET title=%s,text=%s,color=%s,pin_mode=%s,
+            updated_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s""",
+            (title or '', text or '', color, pin_mode, sticky_id, user_id))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка сохранения стика: {error}")
+        return False
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+def get_user_stickies(user_id):
+    conn = get_connection()
+    if not conn: return []
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_stickies_table(cursor)
+        cursor.execute("""SELECT id, source_type, source_id, title, text, color, pin_mode
+            FROM stickies WHERE user_id=%s ORDER BY updated_at DESC""", (user_id,))
+        result = [{'id': r[0], 'source_type': r[1], 'source_id': r[2], 'title': r[3],
+                 'text': r[4], 'color': r[5], 'pin_mode': r[6]} for r in cursor.fetchall()]
+        conn.commit()
+        return result
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+def delete_sticky(sticky_id, user_id):
+    conn = get_connection()
+    if not conn: return False
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_stickies_table(cursor)
+        cursor.execute("DELETE FROM stickies WHERE id=%s AND user_id=%s", (sticky_id, user_id))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
 
 def _ensure_pinned_chats_table(cursor):
     cursor.execute("""CREATE TABLE IF NOT EXISTS pinned_chats (

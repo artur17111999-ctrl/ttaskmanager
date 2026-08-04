@@ -9,9 +9,10 @@ from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
     QToolButton,
-    QMenu
+    QMenu, QSystemTrayIcon
 )
-from PySide6.QtGui import QAction    # ← правильный импорт
+from PySide6.QtGui import QAction, QIcon    # ← правильный импорт
+from pathlib import Path
 from PySide6.QtCore import (
     Qt,
     QPropertyAnimation,
@@ -22,6 +23,7 @@ from PySide6.QtCore import (
 from contacts_widget import ContactsWidget
 from tasks_widget import TasksWidget
 from db import get_unread_notification_count, get_notifications, mark_notifications_as_read
+from sticky_notes import restore_stickies
 
 
 class MainWindow(QMainWindow):
@@ -39,10 +41,47 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Sticky CRM")
         self.init_ui()
+        self._allow_exit = False
+        self._setup_tray()
+        self.sticky_windows = restore_stickies(self.user_data['employee_id'])
         self.showMaximized()
 
         if self.menu_buttons:
             self.menu_buttons[0].click()
+
+    def _setup_tray(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        icon_path = Path(__file__).resolve().parent / "assets" / "tray.svg"
+        self.tray_icon.setIcon(QIcon(str(icon_path)))
+        self.tray_icon.setToolTip("Sticky CRM")
+        menu = QMenu(self)
+        open_action = menu.addAction("Открыть Sticky CRM")
+        open_action.triggered.connect(self._restore_from_tray)
+        menu.addSeparator()
+        exit_action = menu.addAction("Выйти")
+        exit_action.triggered.connect(self._exit_from_tray)
+        self.tray_icon.setContextMenu(menu)
+        self.tray_icon.activated.connect(lambda reason: self._restore_from_tray() if reason == QSystemTrayIcon.Trigger else None)
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray_icon.show()
+
+    def _restore_from_tray(self):
+        self.showNormal()
+        self.showMaximized()
+        self.raise_()
+        self.activateWindow()
+
+    def _exit_from_tray(self):
+        self._allow_exit = True
+        self.tray_icon.hide()
+        self.close()
+
+    def closeEvent(self, event):
+        if self._allow_exit:
+            event.accept()
+        else:
+            self.hide()
+            event.ignore()
 
     def init_ui(self):
         central_widget = QWidget()

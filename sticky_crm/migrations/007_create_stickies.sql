@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS stickies (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    source_type VARCHAR(20) NOT NULL,
+    source_id INTEGER NOT NULL,
+    title VARCHAR(255) NOT NULL DEFAULT '',
+    text TEXT NOT NULL DEFAULT '',
+    color VARCHAR(20) NOT NULL DEFAULT '#fef3a5',
+    pin_mode VARCHAR(30) NOT NULL DEFAULT 'bottom_movable',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_stickies_user ON stickies(user_id);

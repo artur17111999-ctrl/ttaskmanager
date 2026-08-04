@@ -12,6 +12,7 @@ from PySide6.QtGui import QColor, QClipboard
 
 from screenshot_attachments import ScreenshotTextEdit, ScreenshotPreview, add_image_previews
 from .base import EMPLOYEE_ID_ROLE, TAG_ID_ROLE, TAG_COLOR_ROLE
+from sticky_notes import open_sticky
 
 
 class TaskDetailView(QWidget):
@@ -74,6 +75,9 @@ class TaskDetailView(QWidget):
         self.short_description_edit.setObjectName("shortDescriptionEdit")
         self.short_description_edit.setPlaceholderText("Введите краткое описание для стикера")
         short_desc_layout.addWidget(self.short_description_edit)
+        self.short_sticky_button = QPushButton("Создать стик")
+        self.short_sticky_button.clicked.connect(self.create_short_description_sticky)
+        short_desc_layout.addWidget(self.short_sticky_button)
         content_layout.addWidget(short_desc_group)
 
         desc_group = QGroupBox("Описание")
@@ -423,6 +427,8 @@ class TaskDetailView(QWidget):
         for comment in comments:
             card = QFrame()
             card.setObjectName("commentCard")
+            card.setContextMenuPolicy(Qt.CustomContextMenu)
+            card.customContextMenuRequested.connect(lambda _pos, item=comment, widget=card: self._comment_menu(widget, item))
             card_layout = QVBoxLayout(card)
             card_layout.setContentsMargins(10, 8, 10, 8)
             author_label = QLabel(f"{comment['author_name']} · {comment['created_at']}")
@@ -430,6 +436,8 @@ class TaskDetailView(QWidget):
             text_label = QLabel(comment['text'])
             text_label.setWordWrap(True)
             text_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            text_label.setContextMenuPolicy(Qt.CustomContextMenu)
+            text_label.customContextMenuRequested.connect(lambda _pos, item=comment, widget=card: self._comment_menu(widget, item))
             card_layout.addWidget(author_label)
             card_layout.addWidget(text_label)
             if comment['author_id'] == self.current_user_id:
@@ -446,6 +454,21 @@ class TaskDetailView(QWidget):
                 card_layout.addLayout(actions)
             add_image_previews(card_layout, get_image_attachments('comment', comment['id']))
             self.comments_container_layout.addWidget(card)
+
+    def _comment_menu(self, widget, comment):
+        menu = QMenu(widget)
+        action = menu.addAction("Создать стик")
+        action.triggered.connect(lambda: open_sticky(self, self.current_user_id, 'comment', comment['id'], 'Комментарий', comment['text']))
+        menu.exec(widget.mapToGlobal(widget.rect().center()))
+
+    def create_short_description_sticky(self):
+        text = self.short_description_edit.text().strip()
+        if not text or not self.task_data:
+            QMessageBox.information(self, "Стик", "Сначала укажите краткое описание задачи")
+            return
+        status = str(self.task_data.get('status') or '').casefold()
+        color = '#bbf7d0' if 'заверш' in status or 'done' in status else '#fca5a5' if 'просроч' in status or 'cancel' in status else '#fef3a5'
+        open_sticky(self, self.current_user_id, 'task', self.task_id, self.title_edit.text().strip(), text, color)
 
     def send_comment(self):
         from db import add_task_comment
