@@ -329,6 +329,9 @@ class ContactsWidget(QWidget):
         self._typing_timer = QTimer(self)
         self._typing_timer.setSingleShot(True)
         self._typing_timer.timeout.connect(self._hide_typing_indicator)
+        self._peer_typing_timer = QTimer(self)
+        self._peer_typing_timer.setSingleShot(True)
+        self._peer_typing_timer.timeout.connect(self._hide_peer_typing_indicator)
         self._build_ui()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
@@ -373,6 +376,8 @@ class ContactsWidget(QWidget):
         self.header = QLabel("Выберите чат", objectName="chatHeader")
         self.typing_label = QLabel("", objectName="typingIndicator")
         self.typing_label.setVisible(False)
+        self.peer_typing_label = QLabel("", objectName="peerTypingIndicator")
+        self.peer_typing_label.setVisible(False)
         self.message_search = QLineEdit(placeholderText="????? ?? ?????? ??? ???? (??.??)", objectName="messageSearch")
         self.message_search.setClearButtonEnabled(True)
         self.message_search.textChanged.connect(self.search_messages)
@@ -383,6 +388,7 @@ class ContactsWidget(QWidget):
         self.delete_button.clicked.connect(self.delete_selected)
         header_layout.addWidget(self.header)
         header_layout.addWidget(self.typing_label)
+        header_layout.addWidget(self.peer_typing_label)
         header_layout.addWidget(self.message_search, 1)
         header_layout.addStretch()
         header_layout.addWidget(self.selection_label)
@@ -553,12 +559,31 @@ class ContactsWidget(QWidget):
             self.typing_label.setText("Вы печатаете…")
             self.typing_label.setVisible(True)
             self._typing_timer.start(1600)
+            QTimer.singleShot(700, lambda: self.show_peer_typing("Собеседник"))
         else:
             self._hide_typing_indicator()
+            self._hide_peer_typing_indicator()
 
     def _hide_typing_indicator(self):
         self.typing_label.setVisible(False)
         self.typing_label.setText("")
+
+    def show_peer_typing(self, name=None):
+        if not self.current_chat_id:
+            return
+        if self.current_chat_type == "group":
+            message = "Кто-то печатает…"
+        elif name:
+            message = f"{name} печатает…"
+        else:
+            message = "Собеседник печатает…"
+        self.peer_typing_label.setText(message)
+        self.peer_typing_label.setVisible(True)
+        self._peer_typing_timer.start(1800)
+
+    def _hide_peer_typing_indicator(self):
+        self.peer_typing_label.setVisible(False)
+        self.peer_typing_label.setText("")
 
     def send(self):
         if not self.current_chat_id:
@@ -569,6 +594,7 @@ class ContactsWidget(QWidget):
             return
         if send_message(self.current_chat_id, self.current_user_id, text, images):
             self._hide_typing_indicator()
+            self._hide_peer_typing_indicator()
             self.input.blockSignals(True)
             self.input.clear()
             self.input.clear_screenshots()
