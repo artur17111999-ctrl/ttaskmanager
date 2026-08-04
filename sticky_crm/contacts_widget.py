@@ -16,7 +16,8 @@ from db import (
     forward_messages, get_chat_messages, get_contacts_and_groups,
     get_message_attachments, get_new_messages, get_or_create_personal_chat,
     get_personal_chats, get_unread_message_counts, mark_messages_as_read,
-    mark_notifications_as_read, search_chat_messages, send_message,
+    mark_notifications_as_read, pin_chat, search_chat_messages, send_message,
+    unpin_chat, get_pinned_chats,
 )
 from screenshot_attachments import ScreenshotPreview, ScreenshotTextEdit, add_image_previews
 
@@ -418,19 +419,22 @@ class ContactsWidget(QWidget):
         contacts = get_contacts_and_groups(self.current_user_id, query or None)
         chats = get_personal_chats(self.current_user_id)
         unread = get_unread_message_counts(self.current_user_id)
+        pinned_chats = get_pinned_chats(self.current_user_id)
         records = []
         for contact in contacts:
             chat_id = contact.get("chat_id") if contact["type"] != "employee" else chats.get(contact["id"])
             icon = "⭐" if contact["type"] == "self" else "👥" if contact["type"] == "group" else "👤"
-            records.append((contact, chat_id, unread.get(chat_id, 0), icon))
-        records.sort(key=lambda row: (-bool(row[2]), row[0]["name"].casefold()))
+            records.append((contact, chat_id, unread.get(chat_id, 0), icon, chat_id in pinned_chats))
+        records.sort(key=lambda row: (-bool(row[4]), -bool(row[2]), row[0]["name"].casefold()))
         self._suppress_selection = True
         self.contacts.clear()
-        for contact, chat_id, count, icon in records:
-            item = QListWidgetItem(f"{icon}  {contact['name']}")
+        for contact, chat_id, count, icon, pinned in records:
+            marker = "📌 " if pinned else ""
+            item = QListWidgetItem(f"{marker}{icon}  {contact['name']}")
             item.setData(Qt.UserRole, contact)
             item.setData(Qt.UserRole + 1, count)
             item.setData(Qt.UserRole + 2, chat_id)
+            item.setData(Qt.UserRole + 3, pinned)
             self.contacts.addItem(item)
         self._suppress_selection = False
         self._highlight_current()
@@ -636,12 +640,24 @@ class ContactsWidget(QWidget):
         if not item:
             return
         contact = item.data(Qt.UserRole)
-        if contact.get("type") != "group" or contact.get("created_by") != self.current_user_id:
+        chat_id = item.data(Qt.UserRole + 2)
+        if not chat_id:
             return
         menu = QMenu(self)
+        pinned = bool(item.data(Qt.UserRole + 3))
+        pin_action = menu.addAction("Открепить чат" if pinned else "Закрепить чат")
+        pin_action.triggered.connect(lambda: self._toggle_pin(chat_id, pinned))
+        if contact.get("type") == "group" and contact.get("created_by") == self.current_user_id:
+            menu.addSeparator()
         action = menu.addAction("Удалить группу")
         action.triggered.connect(lambda: self._delete_group(contact["chat_id"]))
+        action.setVisible(contact.get("type") == "group" and contact.get("created_by") == self.current_user_id)
         menu.exec(self.contacts.viewport().mapToGlobal(position))
+
+    def _toggle_pin(self, chat_id, pinned):
+        changed = unpin_chat(self.current_user_id, chat_id) if pinned else pin_chat(self.current_user_id, chat_id)
+        if changed:
+            self.load_contacts()
 
     def _delete_group(self, chat_id):
         if QMessageBox.question(self, "Удалить группу", "Группа и её сообщения будут удалены без возможности восстановления.", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:

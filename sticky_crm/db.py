@@ -8,6 +8,72 @@ from datetime import datetime
 from config import DB_CONFIG
 
 
+def _ensure_pinned_chats_table(cursor):
+    cursor.execute("""CREATE TABLE IF NOT EXISTS pinned_chats (
+        user_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+        pinned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, chat_id))""")
+
+
+def pin_chat(user_id, chat_id):
+    return _set_chat_pin(user_id, chat_id, True)
+
+
+def unpin_chat(user_id, chat_id):
+    return _set_chat_pin(user_id, chat_id, False)
+
+
+def _set_chat_pin(user_id, chat_id, pinned):
+    conn = get_connection()
+    if not conn:
+        return False
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_pinned_chats_table(cursor)
+        if pinned:
+            cursor.execute("""INSERT INTO pinned_chats (user_id, chat_id)
+                SELECT %s, chat_id FROM chat_members
+                WHERE chat_id = %s AND employee_id = %s
+                ON CONFLICT (user_id, chat_id) DO NOTHING""", (user_id, chat_id, user_id))
+        else:
+            cursor.execute("DELETE FROM pinned_chats WHERE user_id = %s AND chat_id = %s", (user_id, chat_id))
+        changed = cursor.rowcount > 0
+        conn.commit()
+        return changed
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка изменения закрепления чата: {error}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+def get_pinned_chats(user_id):
+    conn = get_connection()
+    if not conn:
+        return set()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_pinned_chats_table(cursor)
+        cursor.execute("SELECT chat_id FROM pinned_chats WHERE user_id = %s", (user_id,))
+        result = {row[0] for row in cursor.fetchall()}
+        conn.commit()
+        return result
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка получения закреплённых чатов: {error}")
+        return set()
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
 def _ensure_image_attachments_table(cursor):
     cursor.execute("CREATE TABLE IF NOT EXISTS image_attachments (id SERIAL PRIMARY KEY, owner_type VARCHAR(20) NOT NULL, owner_id INTEGER NOT NULL, image_data BYTEA NOT NULL, file_name VARCHAR(255) NOT NULL DEFAULT 'screenshot.png', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_image_attachments_owner ON image_attachments(owner_type, owner_id)")
