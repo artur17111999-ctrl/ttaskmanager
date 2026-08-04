@@ -1,6 +1,7 @@
 QFrame#bubbleFrame[isOwn="false"] { background-color: #1e293b; border-radius: 14px; }
 QFrame#bubbleFrame[isOwn="true"] { background-color: #1d4ed8; border-radius: 14px; }
 QFrame#messageBubble[selected="true"] { background-color: #172554; border: 1px solid #3b82f6; border-radius: 14px; }
+QFrame#messageBubble[sourceTarget="true"] { background-color: #713f12; border: 2px solid #facc15; border-radius: 14px; }
 QFrame#messageBubble[selected="true"] QFrame#bubbleFrame { background-color: #1e40af; }
 
 QFrame#bubbleFrame QLabel { background: transparent; }

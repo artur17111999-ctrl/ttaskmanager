@@ -1,0 +1,27 @@
+#stickiesSearch, #stickyListColor, #stickyListPin {
+    background: #111827;
+    color: #e5edf8;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 7px 10px;
+}
+#stickiesSearch { min-width: 240px; }
+#stickiesScroll, #stickiesContainer { background: #0f172a; border: none; }
+#stickiesRefresh, #stickySourceLink, #stickyHide, #stickyRestore, #stickyArchive, #stickyDelete {
+    background: #1e293b; color: #e5edf8; border: 1px solid #334155; border-radius: 6px; padding: 7px 11px;
+}
+#stickiesRefresh:hover, #stickySourceLink:hover, #stickyHide:hover, #stickyRestore:hover { background: #334155; }
+#stickyArchive { color: #fbbf24; border-color: #92400e; }
+#stickyArchive:hover { background: #78350f; color: #fef3c7; }
+#stickyDelete { color: #fca5a5; border-color: #7f1d1d; }
+#stickyDelete:hover { background: #7f1d1d; color: white; }
+#stickyRestore { color: #86efac; border-color: #166534; }
+#stickyListCard { background: #172033; border: 1px solid #334155; border-radius: 7px; }
+#stickyListCard[sourceType="task"] { border-left: 4px solid #3b82f6; }
+#stickyListCard[sourceType="message"] { border-left: 4px solid #22c55e; }
+#stickyListText { background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 7px; }
+#stickySourceLink { text-align: left; font-weight: 650; color: #93c5fd; }
+#stickySourceStatus { color: #cbd5e1; padding: 0 8px; }
+#stickyDates { color: #8496ab; font-size: 11px; }
+#stickiesGroupTitle { color: #f8fafc; font-size: 17px; font-weight: 700; padding: 10px 2px 4px; }
+#stickiesEmpty { color: #94a3b8; font-size: 18px; padding: 40px; }

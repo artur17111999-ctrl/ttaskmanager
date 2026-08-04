@@ -784,6 +784,27 @@ class ContactsWidget(QWidget):
             self.search.clear()
             self.open_chat_by_id(chat_id)
 
+    def open_message_by_id(self, chat_id, message_id):
+        """Open the source chat and bring a linked message into view."""
+        self.open_chat_by_id(chat_id)
+
+        def reveal():
+            bubble = self.area.bubbles.get(message_id)
+            if not bubble:
+                return
+            self.area.ensureWidgetVisible(bubble, 20, 40)
+            bubble.setProperty('sourceTarget', True)
+            bubble.style().unpolish(bubble); bubble.style().polish(bubble)
+            QTimer.singleShot(1800, lambda: self._clear_source_target(bubble))
+
+        QTimer.singleShot(0, reveal)
+
+    @staticmethod
+    def _clear_source_target(bubble):
+        if bubble:
+            bubble.setProperty('sourceTarget', False)
+            bubble.style().unpolish(bubble); bubble.style().polish(bubble)
+
     def _at_bottom(self):
         bar = self.area.verticalScrollBar()
         return bar.value() >= bar.maximum() - 24

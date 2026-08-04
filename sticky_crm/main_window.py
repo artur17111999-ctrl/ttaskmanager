@@ -23,7 +23,8 @@ from PySide6.QtCore import (
 from contacts_widget import ContactsWidget
 from tasks_widget import TasksWidget
 from db import get_unread_notification_count, get_notifications, mark_notifications_as_read
-from sticky_notes import restore_stickies
+from sticky_notes import restore_stickies, sync_stickies
+from stickies_widget import StickiesWidget
 
 
 class MainWindow(QMainWindow):
@@ -44,6 +45,9 @@ class MainWindow(QMainWindow):
         self._allow_exit = False
         self._setup_tray()
         self.sticky_windows = restore_stickies(self.user_data['employee_id'])
+        self.sticky_sync_timer = QTimer(self)
+        self.sticky_sync_timer.timeout.connect(lambda: sync_stickies(self.user_data['employee_id']))
+        self.sticky_sync_timer.start(3000)
         self.showMaximized()
 
         if self.menu_buttons:
@@ -108,6 +112,7 @@ class MainWindow(QMainWindow):
         menu_data = [
             ("👥  Контакты", 1, "Контакты"),
             ("✓  Задачи", 2, "Задачи"),
+            ("▣  Мои стики", 3, "Мои стики"),
             ("📅  Календарь", 0, "Календарь"),
             ("📄  Документы", 0, "Документы"),
             ("📊  Отчёты", 0, "Отчёты"),
@@ -180,6 +185,11 @@ class MainWindow(QMainWindow):
         )
         self.content_area.addWidget(self.tasks_page)
 
+        self.stickies_page = StickiesWidget(self.user_data['employee_id'])
+        self.stickies_page.openTaskRequested.connect(self.open_task_from_sticky)
+        self.stickies_page.openMessageRequested.connect(self.open_message_from_sticky)
+        self.content_area.addWidget(self.stickies_page)
+
         right_layout.addWidget(self.content_area, 1)
 
         main_layout.addWidget(self.menu_panel)
@@ -216,6 +226,14 @@ class MainWindow(QMainWindow):
             if hasattr(self.contacts_page, 'open_chat_by_id'):
                 self.contacts_page.open_chat_by_id(chat_id)
 
+    def open_task_from_sticky(self, task_id):
+        self.change_page(2, self.menu_buttons[1], "Задачи")
+        self.tasks_page.open_task(task_id)
+
+    def open_message_from_sticky(self, chat_id, message_id):
+        self.change_page(1, self.menu_buttons[0], "Контакты")
+        self.contacts_page.open_message_by_id(chat_id, message_id)
+
     def mark_all_read(self):
         mark_notifications_as_read(self.user_data['employee_id'])
         self.update_notification_badge()
@@ -246,6 +264,8 @@ class MainWindow(QMainWindow):
         animation.setEasingCurve(QEasingCurve.InOutCubic)
 
         self.content_area.setCurrentIndex(index)
+        if widget is getattr(self, 'stickies_page', None):
+            self.stickies_page.reload()
         animation.start()
 
         def cleanup():

@@ -25,6 +25,8 @@ def _ensure_stickies_table(cursor):
     cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS pos_y INTEGER")
     cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS width INTEGER NOT NULL DEFAULT 340")
     cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS height INTEGER NOT NULL DEFAULT 274")
+    cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT FALSE")
+    cursor.execute("ALTER TABLE stickies ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE")
 
 
 def create_sticky(user_id, source_type, source_id, title, text, color='#fef3a5', pin_mode='bottom_movable', geometry=None):
@@ -84,8 +86,8 @@ def get_user_stickies(user_id):
         cursor = conn.cursor()
         _ensure_stickies_table(cursor)
         cursor.execute("""SELECT id, source_type, source_id, title, text, color, pin_mode, pos_x, pos_y, width, height
-            FROM stickies WHERE user_id=%s ORDER BY updated_at DESC""", (user_id,))
-        result = [{'id': r[0], 'source_type': r[1], 'source_id': r[2], 'title': r[3],
+            FROM stickies WHERE user_id=%s AND is_hidden=FALSE AND is_archived=FALSE ORDER BY updated_at DESC""", (user_id,))
+        result = [{'id': r[0], 'user_id': user_id, 'source_type': r[1], 'source_id': r[2], 'title': r[3],
                  'text': r[4], 'color': r[5], 'pin_mode': r[6], 'pos_x': r[7], 'pos_y': r[8],
                  'width': r[9], 'height': r[10]} for r in cursor.fetchall()]
         conn.commit()
@@ -93,6 +95,75 @@ def get_user_stickies(user_id):
     finally:
         if cursor: cursor.close()
         conn.close()
+
+
+def get_stickies_overview(user_id):
+    conn = get_connection()
+    if not conn: return []
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_stickies_table(cursor)
+        cursor.execute("""
+            SELECT s.id, s.source_type, s.source_id, s.title, s.text, s.color, s.pin_mode,
+                   s.pos_x, s.pos_y, s.width, s.height, s.is_hidden, s.is_archived,
+                   s.created_at, s.updated_at,
+                   t.title, COALESCE(ts.title, t.status),
+                   m.message_text, m.chat_id, m.is_deleted
+            FROM stickies s
+            LEFT JOIN tasks t ON s.source_type='task' AND t.id=s.source_id
+            LEFT JOIN task_statuses ts ON t.status_id=ts.id
+            LEFT JOIN messages m ON s.source_type='message' AND m.id=s.source_id
+            WHERE s.user_id=%s
+            ORDER BY s.updated_at DESC
+        """, (user_id,))
+        rows = []
+        for r in cursor.fetchall():
+            rows.append({
+                'id': r[0], 'user_id': user_id, 'source_type': r[1], 'source_id': r[2], 'title': r[3], 'text': r[4],
+                'color': r[5], 'pin_mode': r[6], 'pos_x': r[7], 'pos_y': r[8], 'width': r[9],
+                'height': r[10], 'is_hidden': r[11], 'is_archived': r[12], 'created_at': r[13],
+                'updated_at': r[14], 'task_title': r[15], 'task_status': r[16],
+                'message_text': r[17], 'chat_id': r[18], 'message_deleted': r[19],
+            })
+        conn.commit()
+        return rows
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+def set_sticky_state(sticky_id, user_id, *, hidden=None, archived=None):
+    conn = get_connection()
+    if not conn: return False
+    cursor = None
+    try:
+        cursor = conn.cursor(); _ensure_stickies_table(cursor)
+        updates, params = [], []
+        if hidden is not None: updates.append('is_hidden=%s'); params.append(hidden)
+        if archived is not None: updates.append('is_archived=%s'); params.append(archived)
+        if not updates: return True
+        params.extend([sticky_id, user_id])
+        cursor.execute(f"UPDATE stickies SET {', '.join(updates)}, updated_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s", params)
+        conn.commit(); return cursor.rowcount > 0
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+def _archive_source_stickies(cursor, source_type, source_id):
+    _ensure_stickies_table(cursor)
+    cursor.execute("""UPDATE stickies SET is_archived=TRUE, is_hidden=FALSE,
+        updated_at=CURRENT_TIMESTAMP WHERE source_type=%s AND source_id=%s AND is_archived=FALSE""",
+        (source_type, source_id))
+
+
+def _hide_archived_source_windows(source_type, source_id):
+    try:
+        from sticky_notes import hide_source_stickies
+        hide_source_stickies(source_type, source_id)
+    except (ImportError, RuntimeError):
+        pass
 
 
 def delete_sticky(sticky_id, user_id):
@@ -1075,11 +1146,13 @@ def delete_message(message_id, sender_id=None):
         if not cursor.fetchone():
             conn.rollback()
             return False
+        _archive_source_stickies(cursor, 'message', message_id)
         # Remove dependent rows first, then the message itself (hard delete).
         cursor.execute("DELETE FROM notifications WHERE message_id = %s", (message_id,))
         cursor.execute("DELETE FROM image_attachments WHERE owner_type = 'message' AND owner_id = %s", (message_id,))
         cursor.execute("DELETE FROM messages WHERE id = %s", (message_id,))
         conn.commit()
+        _hide_archived_source_windows('message', message_id)
         return True
     except Exception as e:
         conn.rollback()
@@ -1518,6 +1591,20 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
             """, (title, short_description, description, author_id, executor_id, deadline, priority, creator_id))
         task_id = cursor.fetchone()[0]
         _save_image_attachments(cursor, 'task', task_id, images)
+
+        priority_name = priority or ''
+        if priority_id is not None:
+            cursor.execute("SELECT title, code FROM task_priorities WHERE id=%s", (priority_id,))
+            priority_row = cursor.fetchone()
+            if priority_row:
+                priority_name = f"{priority_row[0]} {priority_row[1]}"
+        normalized_priority = priority_name.strip().casefold()
+        if (short_description or '').strip() and any(value in normalized_priority for value in ('критич', 'блокер', 'critical', 'blocker')):
+            _ensure_stickies_table(cursor)
+            cursor.execute("""INSERT INTO stickies
+                (user_id, source_type, source_id, title, text, color, pin_mode)
+                VALUES (%s, 'task', %s, %s, %s, '#fca5a5', 'top_locked')""",
+                (executor_id, task_id, title or 'Задача', short_description.strip()))
         
         # Добавляем наблюдателей
         for obs_id in observers_ids:
@@ -1555,10 +1642,15 @@ def update_task(task_id, title=None, description=None, executor_id=None, status=
         
         # Если переданы status_id или priority_id, получаем соответствующие текстовые значения
         if status_id is not None:
-            cursor.execute("SELECT title FROM task_statuses WHERE id = %s", (status_id,))
+            cursor.execute("SELECT title, code FROM task_statuses WHERE id = %s", (status_id,))
             result = cursor.fetchone()
             if result:
                 status = result[0]
+                status_code = result[1]
+            else:
+                status_code = None
+        else:
+            status_code = None
         
         if priority_id is not None:
             cursor.execute("SELECT title FROM task_priorities WHERE id = %s", (priority_id,))
@@ -1624,8 +1716,14 @@ def update_task(task_id, title=None, description=None, executor_id=None, status=
                     "INSERT INTO task_tags_link (task_id, tag_id) VALUES (%s, %s)",
                     (task_id, tag_id)
                 )
+
+        normalized_status = f"{status or ''} {status_code or ''}".strip().casefold()
+        if any(value in normalized_status for value in ('выполн', 'заверш', 'done', 'completed')):
+            _archive_source_stickies(cursor, 'task', task_id)
         
         conn.commit()
+        if any(value in normalized_status for value in ('выполн', 'заверш', 'done', 'completed')):
+            _hide_archived_source_windows('task', task_id)
         return True
     except Exception as e:
         conn.rollback()
@@ -1658,6 +1756,8 @@ def delete_task(task_id, user_id):
         
         if author_id != user_id:
             return False, "Удалить задачу может только её автор"
+
+        _archive_source_stickies(cursor, 'task', task_id)
         
         # Удаляем связанные записи
         cursor.execute("DELETE FROM task_observers WHERE task_id = %s", (task_id,))
@@ -1667,6 +1767,7 @@ def delete_task(task_id, user_id):
         cursor.execute("DELETE FROM tasks WHERE id = %s", (task_id,))
         
         conn.commit()
+        _hide_archived_source_windows('task', task_id)
         return True, "Задача успешно удалена"
     except Exception as e:
         conn.rollback()

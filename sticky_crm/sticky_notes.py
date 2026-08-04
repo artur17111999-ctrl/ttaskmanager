@@ -1,7 +1,7 @@
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer
 from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QStyle, QTextEdit, QVBoxLayout
 
-from db import create_sticky, update_sticky, get_user_stickies
+from db import create_sticky, get_user_stickies, set_sticky_state, update_sticky
 
 OPEN_STICKIES = []
 
@@ -47,7 +47,7 @@ class StickyNoteWidget(QFrame):
         header.addWidget(self.title_edit, 1); header.addWidget(self.mode)
         self.save_button = QPushButton(); self.save_button.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton)); self.save_button.setObjectName('stickySave'); self.save_button.setToolTip('Сохранить'); self.save_button.clicked.connect(self.save); header.addSpacing(2); header.addWidget(self.save_button)
         self.minimize_button = QPushButton(); self.minimize_button.setIcon(self.style().standardIcon(QStyle.SP_TitleBarMinButton)); self.minimize_button.setObjectName('stickyMinimize'); self.minimize_button.setToolTip('Свернуть'); self.minimize_button.clicked.connect(self.showMinimized); header.addWidget(self.minimize_button)
-        self.close_button = QPushButton(); self.close_button.setIcon(self.style().standardIcon(QStyle.SP_TitleBarCloseButton)); self.close_button.setObjectName('stickyClose'); self.close_button.setToolTip('Закрыть'); self.close_button.clicked.connect(self.close); header.addWidget(self.close_button)
+        self.close_button = QPushButton(); self.close_button.setIcon(self.style().standardIcon(QStyle.SP_TitleBarCloseButton)); self.close_button.setObjectName('stickyClose'); self.close_button.setToolTip('Скрыть'); self.close_button.clicked.connect(self._hide_note); header.addWidget(self.close_button)
         for button in (self.save_button, self.minimize_button, self.close_button):
             button.setIconSize(QSize(18, 18))
         header_frame = QFrame(); header_frame.setObjectName('stickyHeader'); header_frame.setLayout(header)
@@ -216,12 +216,19 @@ class StickyNoteWidget(QFrame):
         if self in OPEN_STICKIES: OPEN_STICKIES.remove(self)
         event.accept()
 
+    def _hide_note(self):
+        self._save_timer.stop(); self.save()
+        if self.sticky_id is not None:
+            set_sticky_state(self.sticky_id, self.user_id, hidden=True)
+        self.hide()
+
 
 def open_sticky(parent, user_id, source_type, source_id, title, text, color='#fef3a5'):
     # Notes are independent desktop windows and must survive hiding the main window.
     note = StickyNoteWidget(user_id, source_type, source_id, title, text, color)
     OPEN_STICKIES.append(note)
     note.destroyed.connect(lambda _, n=note: OPEN_STICKIES.remove(n) if n in OPEN_STICKIES else None)
+    note.save()
     note.show(); note.raise_(); return note
 
 
@@ -237,3 +244,44 @@ def restore_stickies(user_id):
         note.show()
         notes.append(note)
     return notes
+
+
+def get_open_sticky(sticky_id):
+    return next((note for note in OPEN_STICKIES if note.sticky_id == sticky_id), None)
+
+
+def apply_sticky_record(record):
+    note = get_open_sticky(record['id'])
+    if note is None:
+        note = StickyNoteWidget(
+            record['user_id'], record['source_type'], record['source_id'], record['title'], record['text'],
+            record['color'], record['pin_mode'], record['id'],
+            (record['pos_x'], record['pos_y'], record['width'], record['height'])
+        )
+        OPEN_STICKIES.append(note)
+        note.destroyed.connect(lambda _, n=note: OPEN_STICKIES.remove(n) if n in OPEN_STICKIES else None)
+    else:
+        note.text_edit.setPlainText(record['text'])
+        note.color.setCurrentIndex(max(0, note.color.findData(record['color'])))
+        note.mode.setCurrentIndex(max(0, note.mode.findData(record['pin_mode'])))
+    note.show(); note.raise_()
+    return note
+
+
+def hide_source_stickies(source_type, source_id):
+    for note in list(OPEN_STICKIES):
+        if note.source_type == source_type and note.source_id == source_id:
+            note._save_timer.stop()
+            note.hide()
+
+
+def sync_stickies(user_id):
+    records = get_user_stickies(user_id)
+    visible_ids = {record['id'] for record in records}
+    for note in list(OPEN_STICKIES):
+        if note.user_id == user_id and note.sticky_id not in visible_ids:
+            note.hide()
+    for record in records:
+        note = get_open_sticky(record['id'])
+        if note is None:
+            apply_sticky_record(record)
