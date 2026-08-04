@@ -55,7 +55,7 @@ class ScreenshotPreview(QWidget):
         count = len(self.editor.screenshots)
         self.label.setText(
             f"Прикреплено скриншотов: {count}"
-            if count else "Вставьте скриншот: Ctrl+V"
+            if count else ""
         )
         self.remove_button.setVisible(bool(count))
 
