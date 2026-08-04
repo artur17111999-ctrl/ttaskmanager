@@ -1,7 +1,3 @@
-"""
-Окно авторизации.
-"""
-
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel,
     QLineEdit, QPushButton, QCheckBox
