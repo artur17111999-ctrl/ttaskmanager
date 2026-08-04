@@ -170,6 +170,10 @@ def _ensure_image_attachments_table(cursor):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_image_attachments_owner ON image_attachments(owner_type, owner_id)")
 
 
+def _ensure_tasks_short_description_column(cursor):
+    cursor.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS short_description TEXT")
+
+
 def _save_image_attachments(cursor, owner_type, owner_id, images):
     if not images:
         return
@@ -1389,26 +1393,27 @@ def create_tag(name, color="#808080"):
         conn.close()
 
 
-def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id, status_id=None, priority_id=None, images=None):
+def create_task(title, description, author_id, executor_id, observers_ids, deadline, priority, tag_ids, creator_id, status_id=None, priority_id=None, images=None, short_description=None):
     """Создать новую задачу."""
     conn = get_connection()
     if not conn:
         return None
     try:
         cursor = conn.cursor()
+        _ensure_tasks_short_description_column(cursor)
         # Создаем задачу - поддерживаем как старый формат (priority как текст), так и новый (priority_id)
         if priority_id is not None:
             cursor.execute("""
-                INSERT INTO tasks (title, description, author_id, executor_id, deadline, priority_id, created_by, status_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO tasks (title, short_description, description, author_id, executor_id, deadline, priority_id, created_by, status_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (title, description, author_id, executor_id, deadline, priority_id, creator_id, status_id))
+            """, (title, short_description, description, author_id, executor_id, deadline, priority_id, creator_id, status_id))
         else:
             cursor.execute("""
-                INSERT INTO tasks (title, description, author_id, executor_id, deadline, priority, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO tasks (title, short_description, description, author_id, executor_id, deadline, priority, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-            """, (title, description, author_id, executor_id, deadline, priority, creator_id))
+            """, (title, short_description, description, author_id, executor_id, deadline, priority, creator_id))
         task_id = cursor.fetchone()[0]
         _save_image_attachments(cursor, 'task', task_id, images)
         
@@ -1437,13 +1442,14 @@ def create_task(title, description, author_id, executor_id, observers_ids, deadl
         conn.close()
 
 
-def update_task(task_id, title=None, description=None, executor_id=None, status=None, priority=None, deadline=None, observers_ids=None, tag_ids=None, status_id=None, priority_id=None):
+def update_task(task_id, title=None, description=None, executor_id=None, status=None, priority=None, deadline=None, observers_ids=None, tag_ids=None, status_id=None, priority_id=None, short_description=None):
     """Обновить задачу. Параметры могут быть None для частичного обновления."""
     conn = get_connection()
     if not conn:
         return False
     try:
         cursor = conn.cursor()
+        _ensure_tasks_short_description_column(cursor)
         
         # Если переданы status_id или priority_id, получаем соответствующие текстовые значения
         if status_id is not None:
@@ -1465,6 +1471,9 @@ def update_task(task_id, title=None, description=None, executor_id=None, status=
         if title is not None:
             updates.append("title=%s")
             params.append(title)
+        if short_description is not None:
+            updates.append("short_description=%s")
+            params.append(short_description)
         if description is not None:
             updates.append("description=%s")
             params.append(description)
@@ -1579,10 +1588,12 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
         return []
     try:
         cursor = conn.cursor()
+        _ensure_tasks_short_description_column(cursor)
         query = """
             SELECT 
                 t.id,
                 t.title,
+                t.short_description,
                 t.description,
                 t.status,
                 t.priority,
@@ -1676,15 +1687,16 @@ def get_tasks(filter_params=None, current_user_id=None, sort_by='created_at', so
             tasks.append({
                 'id': row[0],
                 'title': row[1],
-                'description': row[2],
-                'status': row[3],
-                'priority': row[4],
-                'deadline': row[5],
-                'created_at': row[6],
-                'author_name': row[7],
-                'executor_name': row[8],
-                'creator_name': row[9],
-                'author_id': row[10]
+                'short_description': row[2],
+                'description': row[3],
+                'status': row[4],
+                'priority': row[5],
+                'deadline': row[6],
+                'created_at': row[7],
+                'author_name': row[8],
+                'executor_name': row[9],
+                'creator_name': row[10],
+                'author_id': row[11]
             })
         return tasks
     except Exception as e:
@@ -1702,12 +1714,14 @@ def get_task_detail(task_id):
         return None
     try:
         cursor = conn.cursor()
+        _ensure_tasks_short_description_column(cursor)
         
         # Основная информация - получаем как старые поля, так и новые из связанных таблиц
         cursor.execute("""
             SELECT 
                 t.id,
                 t.title,
+                t.short_description,
                 t.description,
                 t.status,
                 t.priority,
@@ -1740,19 +1754,20 @@ def get_task_detail(task_id):
         task = {
             'id': row[0],
             'title': row[1],
-            'description': row[2],
-            'status': row[11] if row[11] else row[3],  # status_title или status
-            'status_code': row[10] if row[10] else None,  # status_code
-            'status_color': row[12] if row[12] else None,  # status_color
-            'priority': row[14] if row[14] else row[4],  # priority_title или priority
-            'priority_code': row[13] if row[13] else None,  # priority_code
-            'priority_color': row[15] if row[15] else None,  # priority_color
-            'deadline': row[5],
-            'created_at': row[6],
-            'author_name': row[7],
-            'executor_name': row[8],
-            'creator_name': row[9],
-            'author_id': row[16],
+            'short_description': row[2],
+            'description': row[3],
+            'status': row[12] if row[12] else row[4],  # status_title или status
+            'status_code': row[11] if row[11] else None,  # status_code
+            'status_color': row[13] if row[13] else None,  # status_color
+            'priority': row[15] if row[15] else row[5],  # priority_title или priority
+            'priority_code': row[14] if row[14] else None,  # priority_code
+            'priority_color': row[16] if row[16] else None,  # priority_color
+            'deadline': row[6],
+            'created_at': row[7],
+            'author_name': row[8],
+            'executor_name': row[9],
+            'creator_name': row[10],
+            'author_id': row[17],
             'observers': [],
             'tags': []
         }

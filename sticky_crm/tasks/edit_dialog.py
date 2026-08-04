@@ -53,6 +53,13 @@ class TaskEditDialog(QDialog):
         title_layout.addWidget(self.title_edit)
         content_layout.addWidget(title_group)
         
+        short_desc_group = QGroupBox("Краткое описание для стикера")
+        short_desc_layout = QVBoxLayout(short_desc_group)
+        self.short_description_edit = QLineEdit(self.task_data.get('short_description', ''))
+        self.short_description_edit.setPlaceholderText("Введите краткое описание для стикера")
+        short_desc_layout.addWidget(self.short_description_edit)
+        content_layout.addWidget(short_desc_group)
+        
         desc_group = QGroupBox("Описание")
         desc_layout = QVBoxLayout(desc_group)
         self.description_edit = QTextEdit()
@@ -315,6 +322,7 @@ class TaskEditDialog(QDialog):
             success = update_task(
                 task_id=self.task_data['id'],
                 title=title,
+                short_description=self.short_description_edit.text().strip(),
                 description=description,
                 executor_id=executor_id,
                 status=None,

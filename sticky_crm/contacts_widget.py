@@ -496,7 +496,18 @@ class ContactsWidget(QWidget):
         self.area.replace_messages(messages, self.current_user_id, self._connect_bubble)
         self.last_message_id = max((message["id"] for message in messages), default=0)
         self._scroll_bottom()
-        self.load_contacts()
+        self._mark_contact_read(chat_id)
+
+    def _mark_contact_read(self, chat_id):
+        """Update the visible unread badge without reloading all contacts from the DB."""
+        current_item = self.contacts.currentItem()
+        for row in range(self.contacts.count()):
+            item = self.contacts.item(row)
+            if item == current_item or item.data(Qt.UserRole + 2) == chat_id:
+                item.setData(Qt.UserRole + 2, chat_id)
+                item.setData(Qt.UserRole + 1, 0)
+                self.contacts.viewport().update()
+                return
 
     def _connect_bubble(self, bubble):
         bubble.editRequested.connect(self._start_edit)

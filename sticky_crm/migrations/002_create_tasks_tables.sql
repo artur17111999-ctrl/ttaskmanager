@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS task_tags (
 CREATE TABLE IF NOT EXISTS tasks (
     id SERIAL PRIMARY KEY,
     title VARCHAR(500) NOT NULL,
+    short_description TEXT,
     description TEXT,
     status VARCHAR(50) DEFAULT 'new',
     priority VARCHAR(50) DEFAULT 'Средний',

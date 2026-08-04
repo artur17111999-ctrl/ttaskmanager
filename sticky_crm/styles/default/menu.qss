@@ -41,7 +41,8 @@
 #headerPanel {
     background: #172033;
     border-bottom: 1px solid #26364d;
-    min-height: 48px;
+    min-height: 40px;
+    max-height: 52px;
 }
 
 #pageTitleLabel { color: #f8fafc; font-size: 16px; font-weight: 650; }

@@ -5,7 +5,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSplitter,
     QTextEdit, QLineEdit, QComboBox, QDateEdit, QListWidget, QListWidgetItem,
-    QMessageBox, QFormLayout, QGroupBox
+    QMessageBox, QFormLayout, QGroupBox, QSizePolicy
 )
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor
@@ -30,14 +30,25 @@ class TaskCreatorWidget(TaskBaseWidget):
     
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(6)
+        main_layout.setAlignment(Qt.AlignTop)
+        self.setContentsMargins(0, 0, 0, 0)
         
-        # Заголовок и кнопка назад
-        header_layout = QHBoxLayout()
-        
+        header_widget = QWidget()
+        header_widget.setObjectName("taskHeaderPanel")
+        header_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        header_widget.setFixedHeight(42)
+
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(8, 3, 8, 3)
+        header_layout.setSpacing(8)
+
         back_btn = QPushButton("← Назад")
         back_btn.setObjectName("backButton")
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setFixedHeight(30)
+        back_btn.setMinimumWidth(90)
         header_layout.addWidget(back_btn)
         back_btn.clicked.connect(self.go_back)
         
@@ -49,39 +60,50 @@ class TaskCreatorWidget(TaskBaseWidget):
         
         header_layout.addStretch()
         
-        empty_spacer = QLabel("")
-        empty_spacer.setMinimumWidth(100)
-        header_layout.addWidget(empty_spacer)
-        
-        main_layout.addLayout(header_layout)
+        main_layout.addWidget(header_widget)
         
         # Основной контейнер с разделителем
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # Левая часть - основная информация
         left_widget = QWidget()
         left_widget.setObjectName("taskMainPanel")
+        left_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 10, 0)
         left_layout.setSpacing(15)
         
-        left_layout.addWidget(QLabel("Наименование задачи:"))
+        title_group = QGroupBox("Наименование задачи")
+        title_layout = QVBoxLayout(title_group)
         self.title_edit = QLineEdit()
         self.title_edit.setObjectName("titleEdit")
         self.title_edit.setPlaceholderText("Введите название задачи")
-        left_layout.addWidget(self.title_edit)
+        title_layout.addWidget(self.title_edit)
+        left_layout.addWidget(title_group)
         
-        left_layout.addWidget(QLabel("Полное описание задачи:"))
+        short_desc_group = QGroupBox("Краткое описание для стикера")
+        short_desc_layout = QVBoxLayout(short_desc_group)
+        self.short_description_edit = QLineEdit()
+        self.short_description_edit.setObjectName("shortDescriptionEdit")
+        self.short_description_edit.setPlaceholderText("Введите краткое описание для стикера")
+        short_desc_layout.addWidget(self.short_description_edit)
+        left_layout.addWidget(short_desc_group)
+
+        desc_group = QGroupBox("Полное описание задачи")
+        desc_layout = QVBoxLayout(desc_group)
         self.description_edit = ScreenshotTextEdit()
         self.description_edit.setObjectName("descriptionEdit")
         self.description_edit.setPlaceholderText("Введите подробное описание задачи")
-        self.description_edit.setMinimumHeight(200)
-        left_layout.addWidget(self.description_edit)
-        left_layout.addWidget(ScreenshotPreview(self.description_edit))
+        self.description_edit.setMinimumHeight(300)
+        self.description_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        desc_layout.addWidget(self.description_edit)
+        desc_layout.addWidget(ScreenshotPreview(self.description_edit))
+        left_layout.addWidget(desc_group)
         
         files_label = QLabel("📎 Скриншоты можно вставить из буфера обмена (Ctrl+V)")
         files_label.setObjectName("filesLabel")
-        files_label.setStyleSheet("color: #888; font-style: italic;")
+        files_label.setStyleSheet("color: #88a; font-style: italic;")
         left_layout.addWidget(files_label)
         
         splitter.addWidget(left_widget)
@@ -89,48 +111,57 @@ class TaskCreatorWidget(TaskBaseWidget):
         # Правая часть - дополнительная информация
         right_widget = QWidget()
         right_widget.setObjectName("taskSidePanel")
+        right_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(10, 0, 0, 0)
         right_layout.setSpacing(15)
         
-        right_layout.addWidget(QLabel("Автор:"))
+        info_group = QGroupBox("Параметры задачи")
+        info_layout = QVBoxLayout(info_group)
+        info_layout.setSpacing(12)
+        info_layout.addWidget(QLabel("Автор:"))
         self.author_label = QLabel(self.current_user_name)
         self.author_label.setObjectName("authorLabel")
-        right_layout.addWidget(self.author_label)
+        info_layout.addWidget(self.author_label)
         
-        right_layout.addWidget(QLabel("Исполнитель:"))
+        info_layout.addWidget(QLabel("Исполнитель:"))
         self.executor_combo = QComboBox()
         self.executor_combo.setObjectName("executorCombo")
         self.make_employee_combo_searchable(self.executor_combo)
-        right_layout.addWidget(self.executor_combo)
+        info_layout.addWidget(self.executor_combo)
         
-        right_layout.addWidget(QLabel("Статус:"))
+        info_layout.addWidget(QLabel("Статус:"))
         self.status_combo = QComboBox()
         self.status_combo.setObjectName("statusCombo")
-        right_layout.addWidget(self.status_combo)
+        info_layout.addWidget(self.status_combo)
         
-        right_layout.addWidget(QLabel("Приоритет:"))
+        info_layout.addWidget(QLabel("Приоритет:"))
         self.priority_combo = QComboBox()
         self.priority_combo.setObjectName("priorityCombo")
-        right_layout.addWidget(self.priority_combo)
+        info_layout.addWidget(self.priority_combo)
         
-        right_layout.addWidget(QLabel("Наблюдатели:"))
+        right_layout.addWidget(info_group)
+        
+        observers_group = QGroupBox("Наблюдатели")
+        observers_layout = QVBoxLayout(observers_group)
         self.observers_list = QListWidget()
         self.observers_list.setObjectName("observersList")
-        self.observers_list.setMaximumHeight(150)
+        self.observers_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.observers_list.setMinimumHeight(180)
         self.observers_search = self.add_list_search(
-            right_layout, self.observers_list, "Поиск по ФИО наблюдателя"
+            observers_layout, self.observers_list, "Поиск по ФИО наблюдателя"
         )
-        right_layout.addWidget(self.observers_list)
+        observers_layout.addWidget(self.observers_list)
+        right_layout.addWidget(observers_group)
         
-        right_layout.addWidget(QLabel("Теги:"))
-        tags_layout = QVBoxLayout()
-        
+        tags_group = QGroupBox("Теги")
+        tags_layout = QVBoxLayout(tags_group)
         self.tags_list = QListWidget()
+        self.tags_search = self.add_list_search(tags_layout, self.tags_list, "Поиск тегов")
         self.tags_list.setSelectionMode(QListWidget.NoSelection)
         self.tags_list.setObjectName("tagsList")
-        self.tags_list.setMaximumHeight(150)
-        self.tags_search = self.add_list_search(tags_layout, self.tags_list, "Поиск тегов")
+        self.tags_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tags_list.setMinimumHeight(150)
         tags_layout.addWidget(self.tags_list)
         
         create_tag_layout = QHBoxLayout()
@@ -146,15 +177,18 @@ class TaskCreatorWidget(TaskBaseWidget):
         create_tag_layout.addWidget(create_tag_btn)
         
         tags_layout.addLayout(create_tag_layout)
-        right_layout.addLayout(tags_layout)
+        right_layout.addWidget(tags_group)
         
-        right_layout.addWidget(QLabel("Дедлайн:"))
+        deadline_group = QGroupBox("Дедлайн")
+        deadline_layout = QVBoxLayout(deadline_group)
         self.deadline_edit = QDateEdit()
         self.deadline_edit.setObjectName("deadlineEdit")
         self.deadline_edit.setCalendarPopup(True)
         self.deadline_edit.setMinimumDate(QDate.currentDate())
         self.deadline_edit.setDate(QDate.currentDate().addDays(7))
-        right_layout.addWidget(self.deadline_edit)
+        self.deadline_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        deadline_layout.addWidget(self.deadline_edit)
+        right_layout.addWidget(deadline_group)
         
         right_layout.addStretch()
         
@@ -162,7 +196,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
         
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(splitter, 1)
         
         # Кнопки действий
         buttons_layout = QHBoxLayout()
@@ -257,6 +291,8 @@ class TaskCreatorWidget(TaskBaseWidget):
             QMessageBox.warning(self, "Ошибка", "Дедлайн не может быть в прошлом")
             return
         
+        short_description = self.short_description_edit.text().strip()
+        
         # Получаем наблюдателей
         observers_ids = []
         for i in range(self.observers_list.count()):
@@ -277,6 +313,7 @@ class TaskCreatorWidget(TaskBaseWidget):
         try:
             task_id = db_create_task(
                 title=title,
+                short_description=short_description,
                 description=description,
                 author_id=self.current_user_id,
                 executor_id=executor_id,

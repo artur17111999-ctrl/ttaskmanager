@@ -101,8 +101,10 @@ class MainWindow(QMainWindow):
         # Верхняя панель с заголовком раздела и кнопкой уведомлений
         self.header_panel = QFrame()
         self.header_panel.setObjectName("headerPanel")
+        self.header_panel.setFixedHeight(40)
         header_layout = QHBoxLayout(self.header_panel)
-        header_layout.setContentsMargins(15, 8, 15, 8)
+        header_layout.setContentsMargins(8, 4, 8, 4)
+        header_layout.setSpacing(6)
 
         self.page_title_label = QLabel("Контакты")
         self.page_title_label.setObjectName("pageTitleLabel")

@@ -68,6 +68,14 @@ class TaskDetailView(QWidget):
         title_layout.addWidget(self.title_edit)
         content_layout.addWidget(title_group)
         
+        short_desc_group = QGroupBox("Краткое описание для стикера")
+        short_desc_layout = QVBoxLayout(short_desc_group)
+        self.short_description_edit = QLineEdit()
+        self.short_description_edit.setObjectName("shortDescriptionEdit")
+        self.short_description_edit.setPlaceholderText("Введите краткое описание для стикера")
+        short_desc_layout.addWidget(self.short_description_edit)
+        content_layout.addWidget(short_desc_group)
+
         desc_group = QGroupBox("Описание")
         desc_layout = QVBoxLayout(desc_group)
         self.desc_text = ScreenshotTextEdit()
@@ -229,6 +237,7 @@ class TaskDetailView(QWidget):
         
         self.header_label.setText(f"Задача №{self.task_data['id']}")
         self.title_edit.setText(self.task_data.get('title', 'N/A'))
+        self.short_description_edit.setText(self.task_data.get('short_description', ''))
         self.desc_text.setPlainText(self.task_data.get('description', 'N/A'))
         self.author_label_val.setText(self.task_data.get('author_name', 'N/A'))
         
@@ -504,7 +513,7 @@ class TaskDetailView(QWidget):
                    if self.tags_list.item(index).checkState() == Qt.Checked]
         try:
             success = update_task(
-                task_id=self.task_id, title=title, description=description,
+                task_id=self.task_id, title=title, short_description=self.short_description_edit.text().strip(), description=description,
                 executor_id=executor_id, status=None, priority=None,
                 deadline=self.deadline_edit.date().toString("yyyy-MM-dd"),
                 observers_ids=observer_ids, tag_ids=tag_ids,

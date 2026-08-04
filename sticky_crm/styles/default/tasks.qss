@@ -19,7 +19,76 @@ QGroupBox::title {
 QWidget#taskMainPanel, QWidget#taskSidePanel {
     background-color: #1e2938;
     border: 1px solid #3a4658;
+    border-radius: 14px;
+    padding: 14px;
+}
+
+QWidget#taskHeaderPanel {
+    background: transparent;
+    margin: 0;
+    padding: 0;
+}
+
+QGroupBox {
+    background-color: #172031;
+    border: 1px solid #2f3e56;
     border-radius: 12px;
+    margin-top: 12px;
+    padding: 12px;
+    color: #cad6e6;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 14px;
+    padding: 0 6px;
+    color: #93b8ff;
+}
+
+QComboBox, QDateEdit, QLineEdit, QListWidget {
+    background: #111b27;
+    border: 1px solid #2f3e56;
+    border-radius: 10px;
+    color: #e6edf6;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QListWidget {
+    padding: 6px;
+}
+
+QPushButton#createTaskMainButton {
+    min-height: 34px;
+    padding: 0 20px;
+    border-radius: 14px;
+    background-color: #2563eb;
+    color: white;
+    font-weight: 600;
+}
+
+QPushButton#createTaskMainButton:hover {
+    background-color: #1d4ed8;
+}
+
+QLabel#taskHeaderLabel {
+    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QPushButton#backButton {
+    min-height: 28px;
+    padding: 4px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+QPushButton#backButton:hover {
+    background: #1d4ed8;
+    color: #ffffff;
 }
 
 QLineEdit#selectionSearchEdit {
