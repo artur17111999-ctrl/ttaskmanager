@@ -1,90 +1,19 @@
-/* Пузырь чужого сообщения */
-QFrame#bubbleFrame[isOwn="false"] {
-    background-color: #182533;
-    border-radius: 14px;
-}
+QFrame#bubbleFrame[isOwn="false"] { background-color: #1e293b; border-radius: 14px; }
+QFrame#bubbleFrame[isOwn="true"] { background-color: #1d4ed8; border-radius: 14px; }
+QFrame#messageBubble[selected="true"] { background-color: #172554; border: 1px solid #3b82f6; border-radius: 14px; }
+QFrame#messageBubble[selected="true"] QFrame#bubbleFrame { background-color: #1e40af; }
 
-
-/* Пузырь своего сообщения */
-QFrame#bubbleFrame[isOwn="true"] {
-    background-color: #2b5278;
-    border-radius: 14px;
-}
-
-
-/* Выделенное сообщение (зеленоватый оттенок) */
-QFrame#messageBubble[selected="true"] {
-    background-color: rgba(51, 144, 236, 0.16);
-    border: 1px solid #3390ec;
-    border-radius: 14px;
-}
-
-QFrame#messageBubble[selected="true"] QFrame#bubbleFrame {
-    background-color: #315d88;
-}
-
-
-/* Текст сообщения */
-QLabel#messageText {
-    color: white;
-    background-color: transparent;
-    font-size: 10.5pt;
-}
-
-/* Информация о пересланном сообщении */
-QLabel#forwardedLabel {
-    color: #8fa3b8;
-    font-size: 7pt;
-    font-style: italic;
-    background-color: transparent;
-}
-
-/* Время */
-QLabel#timeLabel {
-    color: #8fa3b8;
-    font-size: 8pt;
-}
-
-
-QFrame#bubbleFrame[isOwn="true"] QLabel#timeLabel {
-    color: #d5e8ff;
-}
-
-
-/* Имя отправителя */
-QLabel#senderName {
-    color: #6ab8ff;
-    font-weight: bold;
-    font-size: 9pt;
-}
-
-
-/* Статус прочтения */
-QLabel#statusIcon {
-    color: #8fd5ff;
-}
-
-
-/* Поле редактирования */
-QLineEdit#editInput {
-    background-color: #17212b;
-    border: 1px solid #3390ec;
-    border-radius: 12px;
-    color: white;
-    padding: 8px;
-}
-
-#inputFrame, #screenshotPreview { background: #17212b; }
-QLabel#messageText[deleted="true"] { color: #8fa3b8; font-style: italic; }
+QFrame#bubbleFrame QLabel { background: transparent; }
+QLabel#messageText { color: #f8fafc; font-size: 10.5pt; }
+QLabel#forwardedLabel { color: #a8bad0; font-size: 7pt; font-style: italic; }
+QLabel#timeLabel { color: #a8bad0; font-size: 8pt; }
+QFrame#bubbleFrame[isOwn="true"] QLabel#timeLabel { color: #dbeafe; }
+QLabel#senderName { color: #93c5fd; font-weight: 700; font-size: 9pt; }
+QLabel#statusIcon { color: #93c5fd; }
+QLabel#messageText[deleted="true"] { color: #94a3b8; font-style: italic; }
 QLabel#editedLabel { color: #b5cfdf; font-size: 8pt; }
-QLabel#statusIcon[read="true"] { color: #55c1ff; }
-QFrame#bubbleFrame QLabel {
-    background-color: transparent;
-}
+QLabel#statusIcon[read="true"] { color: #7dd3fc; }
 
-QLabel#screenshotAttachment {
-    background-color: #17212b;
-    border: 1px solid #3a4658;
-    border-radius: 8px;
-    padding: 4px;
-}
+QLineEdit#editInput { background: #0f172a; border: 1px solid #3b82f6; border-radius: 10px; color: #f8fafc; padding: 8px; }
+#inputFrame, #screenshotPreview { background: #172033; }
+QLabel#screenshotAttachment { border: 1px solid #475569; border-radius: 8px; padding: 4px; }

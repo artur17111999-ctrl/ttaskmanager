@@ -54,8 +54,7 @@ QFrame#taskCard:hover {
 }
 
 /* Все элементы внутри карточки прозрачные */
-QFrame#taskCard QLabel,
-QFrame#taskCard QWidget {
+QFrame#taskCard QLabel {
     background-color: transparent;
 }
 
@@ -128,40 +127,32 @@ QPushButton#deleteTaskButton:pressed {
 
 /* Бейдж низкого приоритета */
 QLabel#priorityLow {
-    background-color: #2ecc71;
-    color: white;
-    border-radius: 12px;
-    padding: 4px 12px;
+    color: #86efac;
+    padding: 4px 0;
     font-size: 12px;
     font-weight: bold;
 }
 
 /* Бейдж среднего приоритета */
 QLabel#priorityMedium {
-    background-color: #f39c12;
-    color: white;
-    border-radius: 12px;
-    padding: 4px 12px;
+    color: #fcd34d;
+    padding: 4px 0;
     font-size: 12px;
     font-weight: bold;
 }
 
 /* Бейдж критичного приоритета */
 QLabel#priorityCritical {
-    background-color: #e74c3c;
-    color: white;
-    border-radius: 12px;
-    padding: 4px 12px;
+    color: #fca5a5;
+    padding: 4px 0;
     font-size: 12px;
     font-weight: bold;
 }
 
 /* Бейдж приоритета-блокера */
 QLabel#priorityBlocker {
-    background-color: #9b59b6;
-    color: white;
-    border-radius: 12px;
-    padding: 4px 12px;
+    color: #d8b4fe;
+    padding: 4px 0;
     font-size: 12px;
     font-weight: bold;
 }
@@ -312,7 +303,6 @@ QPushButton#clearScreenshotsButton:hover {
 }
 
 QLabel#screenshotAttachment {
-    background-color: #18222d;
     border: 1px solid #3a4658;
     border-radius: 8px;
     padding: 4px;

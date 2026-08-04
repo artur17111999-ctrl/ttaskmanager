@@ -1,133 +1,61 @@
 #menuPanel {
-    background:#111827;
-    border-right:1px solid #334155;
+    background: #111827;
+    border-right: 1px solid #26364d;
 }
-
-
 
 #menuHeader {
-    color:white;
-    font-size:26px;
-    font-weight:900;
-    padding:25px;
+    color: #f8fafc;
+    font-size: 25px;
+    font-weight: 700;
+    padding: 24px 22px 16px;
 }
-
-
 
 #menuButton {
-    background:#1e293b;
-    color:#cbd5e1;
-    border-radius:14px;
-    border:1px solid transparent;
-    margin:5px 8px;
-    padding:18px 22px;
-    font-size:18px;
-    font-weight:800;
-    text-align:left;
+    background: transparent;
+    color: #aebed1;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    margin: 3px 10px;
+    padding: 13px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: left;
 }
 
-
-
-#menuButton:hover {
-    background:#334155;
-    color:white;
-    border:1px solid #3b82f6;
-
-}
-
-
-
-#menuButton:checked {
-    background: #5b8cff;
-    color: white;
-    font-weight: bold;
-}
-
-
-
-#menuButton {
-
-    background:#1e293b;
-    color:#cbd5e1;
-    border-radius:14px;
-    border:1px solid transparent;
-    margin:2px 8px;
-    padding:20px 22px;
-    font-size:21px;
-    font-weight:900;
-    text-align:left;
-
-}
-
-
-
+#menuButton:hover { background: #1e293b; color: #f8fafc; }
+#menuButton:checked { background: #2563eb; color: #ffffff; }
 
 #userInfoLabel {
-
-    color:#94a3b8;
-    background:#0f172a;
-    border-radius:12px;
-    margin:10px;
-    padding:18px;
-    font-size:15px;
-    font-weight:700;
-}
-
-
-
-
-#contentArea {
-    background:#0b1220;
-    border-radius:18px;
-    margin:12px;
-}
-
-
-
-#emptyPage {
-    color:#64748b;
-    font-size:24px;
-}
-/* Панель заголовка */
-#headerPanel {
-    background: #1a2332;
-    border-bottom: 1px solid #313a49;
-    min-height: 40px;
-}
-
-#pageTitleLabel {
-    color: white;
-    font-size: 16px;
+    color: #b7c5d8;
+    border-top: 1px solid #26364d;
+    margin: 12px 10px 4px;
+    padding: 16px 8px 4px;
+    font-size: 14px;
     font-weight: 600;
 }
 
-/* Кнопка уведомлений */
+#contentArea { background: #0f172a; margin: 0; }
+
+#emptyPage { color: #94a3b8; font-size: 22px; }
+
+#headerPanel {
+    background: #172033;
+    border-bottom: 1px solid #26364d;
+    min-height: 48px;
+}
+
+#pageTitleLabel { color: #f8fafc; font-size: 16px; font-weight: 650; }
+
 #notificationButton {
     background: transparent;
     border: none;
-    color: white;
+    color: #cbd5e1;
+    border-radius: 8px;
     font-size: 18px;
-    padding: 4px;
+    padding: 6px;
 }
+#notificationButton:hover { background: #26364d; color: #ffffff; }
 
-#notificationButton:hover {
-    background: #2a3342;
-    border-radius: 4px;
-}
-
-/* Меню уведомлений */
-QMenu {
-    background: #1a2332;
-    border: 1px solid #313a49;
-    padding: 5px;
-    color: white;
-}
-
-QMenu::item {
-    padding: 6px 20px;
-    border-radius: 4px;
-}
-
-QMenu::item:selected {
-    background: #3390ec;
-}
+QMenu { background: #172033; border: 1px solid #334155; border-radius: 8px; padding: 5px; color: #f8fafc; }
+QMenu::item { padding: 8px 22px; border-radius: 5px; }
+QMenu::item:selected { background: #2563eb; }

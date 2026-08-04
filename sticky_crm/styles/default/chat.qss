@@ -1,5 +1,4 @@
 #chatHeader {
-    background: #17212b;
     border-bottom: 1px solid #24313d;
     color: white;
     font-size: 16px;

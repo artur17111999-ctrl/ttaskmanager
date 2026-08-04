@@ -1,12 +1,33 @@
+QMainWindow, QDialog {
+    background: #0f172a;
+}
+
 QWidget {
-    background: qlineargradient(
-        x1:0, y1:0,
-        x2:1, y2:1,
-        stop:0 #0d1017,
-        stop:0.45 #151b24,
-        stop:1 #202938
-    );
-    color: #f4f6fb;
-    font-family: "Segoe UI Variable", "Segoe UI";
+    color: #e5edf8;
+    font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
     font-size: 14px;
 }
+
+QLabel {
+    background: transparent;
+}
+
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    width: 10px;
+    background: transparent;
+    margin: 4px;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 28px;
+    background: #475569;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical:hover { background: #64748b; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
