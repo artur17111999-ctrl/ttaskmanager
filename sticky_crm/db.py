@@ -74,6 +74,97 @@ def get_pinned_chats(user_id):
         conn.close()
 
 
+def _ensure_drafts_table(cursor):
+    cursor.execute("""CREATE TABLE IF NOT EXISTS drafts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+        text TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, chat_id)
+    )""")
+
+
+def save_draft(user_id, chat_id, text):
+    if not user_id or not chat_id:
+        return False
+    text = text or ""
+    conn = get_connection()
+    if not conn:
+        return False
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_drafts_table(cursor)
+        if text.strip():
+            cursor.execute(
+                """INSERT INTO drafts (user_id, chat_id, text, updated_at)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (user_id, chat_id)
+                DO UPDATE SET text = EXCLUDED.text, updated_at = CURRENT_TIMESTAMP""",
+                (user_id, chat_id, text),
+            )
+        else:
+            cursor.execute("DELETE FROM drafts WHERE user_id = %s AND chat_id = %s", (user_id, chat_id))
+        conn.commit()
+        return True
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка сохранения черновика: {error}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+def get_draft(user_id, chat_id):
+    if not user_id or not chat_id:
+        return ""
+    conn = get_connection()
+    if not conn:
+        return ""
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_drafts_table(cursor)
+        cursor.execute("SELECT text FROM drafts WHERE user_id = %s AND chat_id = %s", (user_id, chat_id))
+        row = cursor.fetchone()
+        conn.commit()
+        return row[0] if row else ""
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка получения черновика: {error}")
+        return ""
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+def delete_draft(user_id, chat_id):
+    if not user_id or not chat_id:
+        return False
+    conn = get_connection()
+    if not conn:
+        return False
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        _ensure_drafts_table(cursor)
+        cursor.execute("DELETE FROM drafts WHERE user_id = %s AND chat_id = %s", (user_id, chat_id))
+        conn.commit()
+        return True
+    except Exception as error:
+        conn.rollback()
+        print(f"Ошибка удаления черновика: {error}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
 def _ensure_image_attachments_table(cursor):
     cursor.execute("CREATE TABLE IF NOT EXISTS image_attachments (id SERIAL PRIMARY KEY, owner_type VARCHAR(20) NOT NULL, owner_id INTEGER NOT NULL, image_data BYTEA NOT NULL, file_name VARCHAR(255) NOT NULL DEFAULT 'screenshot.png', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_image_attachments_owner ON image_attachments(owner_type, owner_id)")

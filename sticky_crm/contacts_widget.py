@@ -12,12 +12,12 @@ from PySide6.QtWidgets import (
 )
 
 from db import (
-    create_group_chat_auto, delete_group_chat, delete_message, edit_message,
-    forward_messages, get_chat_messages, get_contacts_and_groups,
-    get_message_attachments, get_new_messages, get_or_create_personal_chat,
-    get_personal_chats, get_unread_message_counts, mark_messages_as_read,
-    mark_notifications_as_read, pin_chat, search_chat_messages, send_message,
-    unpin_chat, get_pinned_chats,
+    create_group_chat_auto, delete_draft, delete_group_chat, delete_message,
+    edit_message, forward_messages, get_chat_messages, get_contacts_and_groups,
+    get_draft, get_message_attachments, get_new_messages, get_or_create_personal_chat,
+    get_personal_chats, get_pinned_chats, get_unread_message_counts,
+    mark_messages_as_read, mark_notifications_as_read, pin_chat, save_draft,
+    search_chat_messages, send_message, unpin_chat,
 )
 from screenshot_attachments import ScreenshotPreview, ScreenshotTextEdit, add_image_previews
 
@@ -326,6 +326,9 @@ class ContactsWidget(QWidget):
         self._suppress_selection = False
         self._editing_bubble = None
         self._message_filter = ""
+        self._typing_timer = QTimer(self)
+        self._typing_timer.setSingleShot(True)
+        self._typing_timer.timeout.connect(self._hide_typing_indicator)
         self._build_ui()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
@@ -368,6 +371,8 @@ class ContactsWidget(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(18, 10, 14, 10)
         self.header = QLabel("Выберите чат", objectName="chatHeader")
+        self.typing_label = QLabel("", objectName="typingIndicator")
+        self.typing_label.setVisible(False)
         self.message_search = QLineEdit(placeholderText="????? ?? ?????? ??? ???? (??.??)", objectName="messageSearch")
         self.message_search.setClearButtonEnabled(True)
         self.message_search.textChanged.connect(self.search_messages)
@@ -377,6 +382,7 @@ class ContactsWidget(QWidget):
         self.forward_button.clicked.connect(self.forward_selected)
         self.delete_button.clicked.connect(self.delete_selected)
         header_layout.addWidget(self.header)
+        header_layout.addWidget(self.typing_label)
         header_layout.addWidget(self.message_search, 1)
         header_layout.addStretch()
         header_layout.addWidget(self.selection_label)
@@ -394,6 +400,8 @@ class ContactsWidget(QWidget):
         self.input.setMinimumHeight(44)
         self.input.setMaximumHeight(110)
         self.input.installEventFilter(self)
+        self.input.textChanged.connect(self._sync_draft)
+        self.input.textChanged.connect(self._handle_typing)
         self.send_button = QPushButton("➤", objectName="sendBtn", toolTip="Отправить")
         self.send_button.setFixedSize(44, 44)
         self.send_button.clicked.connect(self.send)
@@ -458,14 +466,21 @@ class ContactsWidget(QWidget):
         self.current_contact_id = contact_id
         self.header.setText(name)
         self._message_filter = ""
+        self._hide_typing_indicator()
         self.message_search.blockSignals(True)
         self.message_search.clear()
         self.message_search.blockSignals(False)
+        self.input.blockSignals(True)
         self.input.clear()
         self.input.clear_screenshots()
+        self.input.blockSignals(False)
         self._set_chat_enabled(True)
         mark_notifications_as_read(self.current_user_id, chat_id)
         mark_messages_as_read(chat_id, self.current_user_id)
+        draft_text = get_draft(self.current_user_id, chat_id)
+        self.input.blockSignals(True)
+        self.input.setPlainText(draft_text)
+        self.input.blockSignals(False)
         messages = self._prepare_messages(get_chat_messages(chat_id, limit=500))
         self.area.replace_messages(messages, self.current_user_id, self._connect_bubble)
         self.last_message_id = max((message["id"] for message in messages), default=0)
@@ -522,6 +537,29 @@ class ContactsWidget(QWidget):
                 return True
         return super().eventFilter(watched, event)
 
+    def _sync_draft(self):
+        if not self.current_chat_id:
+            return
+        text = self.input.toPlainText()
+        if text.strip():
+            save_draft(self.current_user_id, self.current_chat_id, text)
+        else:
+            delete_draft(self.current_user_id, self.current_chat_id)
+
+    def _handle_typing(self):
+        if not self.current_chat_id:
+            return
+        if self.input.toPlainText().strip():
+            self.typing_label.setText("Вы печатаете…")
+            self.typing_label.setVisible(True)
+            self._typing_timer.start(1600)
+        else:
+            self._hide_typing_indicator()
+
+    def _hide_typing_indicator(self):
+        self.typing_label.setVisible(False)
+        self.typing_label.setText("")
+
     def send(self):
         if not self.current_chat_id:
             return
@@ -530,8 +568,12 @@ class ContactsWidget(QWidget):
         if not text and not images:
             return
         if send_message(self.current_chat_id, self.current_user_id, text, images):
+            self._hide_typing_indicator()
+            self.input.blockSignals(True)
             self.input.clear()
             self.input.clear_screenshots()
+            self.input.blockSignals(False)
+            delete_draft(self.current_user_id, self.current_chat_id)
             self.refresh()
             self._scroll_bottom()
         else:
