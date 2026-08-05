@@ -1,7 +1,7 @@
 from PySide6.QtCore import QSettings, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QSizePolicy, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from db import delete_sticky, get_stickies_overview, set_sticky_state, update_sticky
@@ -35,16 +35,23 @@ class StickiesWidget(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self); root.setContentsMargins(20, 18, 20, 20); root.setSpacing(12)
-        filters = QHBoxLayout(); filters.setSpacing(8)
-        self.search = QLineEdit(); self.search.setObjectName('stickiesSearch'); self.search.setPlaceholderText('Поиск по тексту стикера...')
+        filters = QVBoxLayout(); filters.setSpacing(6)
+        filter_top = QHBoxLayout(); filter_top.setSpacing(8)
+        self.search = QLineEdit(); self.search.setObjectName('stickiesSearch'); self.search.setPlaceholderText('Поиск по тексту...'); self.search.setFixedWidth(190)
         self.source_filter = QComboBox(); self.source_filter.addItem('Все источники', 'all'); self.source_filter.addItem('Задачи', 'task'); self.source_filter.addItem('Сообщения', 'message')
         self.visibility_filter = QComboBox(); self.visibility_filter.addItem('Видимые', 'visible'); self.visibility_filter.addItem('Скрытые', 'hidden'); self.visibility_filter.addItem('Архив', 'archived'); self.visibility_filter.addItem('Все', 'all')
+        self.source_filter.setFixedWidth(118)
+        self.visibility_filter.setFixedWidth(92)
+        filter_top.addWidget(self.search); filter_top.addWidget(self.source_filter); filter_top.addWidget(self.visibility_filter); filter_top.addStretch()
+        filters.addLayout(filter_top)
+        filter_bottom = QHBoxLayout(); filter_bottom.setSpacing(8)
         self.group_filter = QComboBox(); self.group_filter.addItem('Группировать по источнику', True); self.group_filter.addItem('Без группировки', False)
         self.sort_filter = QComboBox(); self.sort_filter.addItem('Изменены недавно', 'updated_desc'); self.sort_filter.addItem('Сначала новые', 'created_desc'); self.sort_filter.addItem('Сначала старые', 'created_asc'); self.sort_filter.addItem('По пину', 'pin')
+        self.group_filter.setFixedWidth(190)
+        self.sort_filter.setFixedWidth(145)
         refresh = QPushButton('Обновить'); refresh.setObjectName('stickiesRefresh'); refresh.clicked.connect(self.reload)
-        for widget in (self.search, self.source_filter, self.visibility_filter, self.group_filter, self.sort_filter):
-            filters.addWidget(widget)
-        filters.addWidget(refresh); root.addLayout(filters)
+        filter_bottom.addWidget(self.group_filter); filter_bottom.addWidget(self.sort_filter); filter_bottom.addWidget(refresh); filter_bottom.addStretch()
+        filters.addLayout(filter_bottom); root.addLayout(filters)
         self.search.textChanged.connect(self._filters_changed)
         for combo in (self.source_filter, self.visibility_filter, self.group_filter, self.sort_filter): combo.currentIndexChanged.connect(self._filters_changed)
 
@@ -111,7 +118,8 @@ class StickiesWidget(QWidget):
 
     def _create_card(self, record):
         card = QFrame(); card.setObjectName('stickyListCard'); card.setProperty('sourceType', record['source_type'])
-        layout = QVBoxLayout(card); layout.setContentsMargins(14, 12, 14, 12); layout.setSpacing(8)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout = QVBoxLayout(card); layout.setContentsMargins(12, 10, 12, 10); layout.setSpacing(6)
         top = QHBoxLayout()
         source_text, source_status = self._source_summary(record)
         source = QPushButton(source_text); source.setObjectName('stickySourceLink'); source.setToolTip(source_status); source.clicked.connect(lambda: self._open_source(record)); top.addWidget(source, 1)
@@ -119,7 +127,7 @@ class StickiesWidget(QWidget):
         dates = QLabel(f"Создан: {record['created_at']:%d.%m.%Y %H:%M}  ·  Изменён: {record['updated_at']:%d.%m.%Y %H:%M}"); dates.setObjectName('stickyDates'); top.addWidget(dates)
         layout.addLayout(top)
 
-        text = QTextEdit(record['text']); text.setObjectName('stickyListText'); text.setFixedHeight(72); layout.addWidget(text)
+        text = QTextEdit(record['text']); text.setObjectName('stickyListText'); text.setFixedHeight(58); layout.addWidget(text)
         text_timer = QTimer(card); text_timer.setSingleShot(True); text_timer.setInterval(650)
         text_timer.timeout.connect(lambda r=record, e=text: self._save_record(r, text=e.toPlainText()))
         text.textChanged.connect(text_timer.start)

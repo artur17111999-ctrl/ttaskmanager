@@ -2124,11 +2124,11 @@ def delete_task_comment(comment_id, user_id):
             DELETE FROM task_comments
             WHERE id = %s AND author_id = %s
         """, (comment_id, user_id))
-        if cursor.rowcount:
+        deleted = cursor.rowcount > 0
+        if deleted:
             cursor.execute("DELETE FROM image_attachments WHERE owner_type = 'comment' AND owner_id = %s", (comment_id,))
         conn.commit()
-        success = cursor.rowcount > 0
-        return success
+        return deleted
     except Exception as e:
         conn.rollback()
         print(f"Ошибка удаления комментария: {e}")

@@ -3,9 +3,12 @@
     color: #e5edf8;
     border: 1px solid #334155;
     border-radius: 6px;
-    padding: 7px 10px;
+    padding: 5px 8px;
+    min-height: 28px;
 }
-#stickiesSearch { min-width: 240px; }
+#stickiesSearch { min-width: 180px; max-width: 190px; }
+#stickyListColor, #stickyListPin { min-height: 28px; }
+#stickiesRefresh { min-height: 28px; padding: 5px 12px; }
 #stickiesScroll, #stickiesContainer { background: #0f172a; border: none; }
 #stickiesRefresh, #stickySourceLink, #stickyHide, #stickyRestore, #stickyArchive, #stickyDelete {
     background: #1e293b; color: #e5edf8; border: 1px solid #334155; border-radius: 6px; padding: 7px 11px;
@@ -16,7 +19,7 @@
 #stickyDelete { color: #fca5a5; border-color: #7f1d1d; }
 #stickyDelete:hover { background: #7f1d1d; color: white; }
 #stickyRestore { color: #86efac; border-color: #166534; }
-#stickyListCard { background: #172033; border: 1px solid #334155; border-radius: 7px; }
+#stickyListCard { background: #172033; border: 1px solid #334155; border-radius: 7px; max-height: 175px; }
 #stickyListCard[sourceType="task"] { border-left: 4px solid #3b82f6; }
 #stickyListCard[sourceType="message"] { border-left: 4px solid #22c55e; }
 #stickyListText { background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 7px; }

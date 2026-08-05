@@ -3,7 +3,7 @@
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSplitter,
     QTextEdit, QLineEdit, QComboBox, QDateEdit, QListWidget, QListWidgetItem,
     QMessageBox, QFormLayout, QGroupBox, QFrame, QSizePolicy, QMenu, QApplication, QDialog, QCompleter, QInputDialog
 )
@@ -60,6 +60,17 @@ class TaskDetailView(QWidget):
         content_layout = QVBoxLayout(content_widget)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(15)
+
+        splitter = QSplitter(Qt.Horizontal)
+        left_panel = QWidget(objectName="taskMainPanel")
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 10, 0)
+        left_layout.setSpacing(15)
+        right_panel = QWidget(objectName="taskSidePanel")
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(10, 0, 0, 0)
+        right_layout.setSpacing(15)
+        right_layout.setAlignment(Qt.AlignTop)
         
         title_group = QGroupBox("Название")
         title_layout = QVBoxLayout(title_group)
@@ -67,7 +78,7 @@ class TaskDetailView(QWidget):
         self.title_edit.setObjectName("titleEdit")
         self.title_edit.setPlaceholderText("Введите название задачи")
         title_layout.addWidget(self.title_edit)
-        content_layout.addWidget(title_group)
+        left_layout.addWidget(title_group)
         
         short_desc_group = QGroupBox("Краткое описание для стикера")
         short_desc_layout = QVBoxLayout(short_desc_group)
@@ -78,14 +89,15 @@ class TaskDetailView(QWidget):
         self.short_sticky_button = QPushButton("Создать стик")
         self.short_sticky_button.clicked.connect(self.create_short_description_sticky)
         short_desc_layout.addWidget(self.short_sticky_button)
-        content_layout.addWidget(short_desc_group)
+        left_layout.addWidget(short_desc_group)
 
         desc_group = QGroupBox("Описание")
         desc_layout = QVBoxLayout(desc_group)
         self.desc_text = ScreenshotTextEdit()
         self.desc_text.setObjectName("descriptionEdit")
         self.desc_text.setPlaceholderText("Введите подробное описание задачи")
-        self.desc_text.setMinimumHeight(150)
+        self.desc_text.setMinimumHeight(300)
+        self.desc_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.desc_text.setTextInteractionFlags(Qt.TextEditorInteraction)
         desc_layout.addWidget(self.desc_text)
         desc_layout.addWidget(ScreenshotPreview(self.desc_text))
@@ -97,7 +109,8 @@ class TaskDetailView(QWidget):
         self.task_images_label.setObjectName("attachmentSectionLabel")
         self.task_images_layout.addWidget(self.task_images_label)
         desc_layout.addWidget(self.task_images_widget)
-        content_layout.addWidget(desc_group)
+        desc_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        left_layout.addWidget(desc_group)
         
         info_group = QGroupBox("Информация")
         info_layout = QFormLayout(info_group)
@@ -128,7 +141,8 @@ class TaskDetailView(QWidget):
         
         self.created_at_label_val = QLabel("")
         info_layout.addRow("Создана:", self.created_at_label_val)
-        content_layout.addWidget(info_group)
+        info_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        right_layout.addWidget(info_group)
         
         self.observers_group = QGroupBox("Наблюдатели")
         observers_layout = QVBoxLayout(self.observers_group)
@@ -140,7 +154,8 @@ class TaskDetailView(QWidget):
         self.observers_search.textChanged.connect(self.filter_observers)
         observers_layout.addWidget(self.observers_search)
         observers_layout.addWidget(self.observers_list)
-        content_layout.addWidget(self.observers_group)
+        self.observers_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        right_layout.addWidget(self.observers_group)
         
         self.tags_group = QGroupBox("Теги")
         tags_layout = QVBoxLayout(self.tags_group)
@@ -166,7 +181,8 @@ class TaskDetailView(QWidget):
         create_tag_btn.clicked.connect(self.create_new_tag)
         tags_buttons_layout.addWidget(create_tag_btn)
         tags_layout.addLayout(tags_buttons_layout)
-        content_layout.addWidget(self.tags_group)
+        self.tags_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        right_layout.addWidget(self.tags_group)
         
         comment_input_group = QGroupBox("Добавить комментарий")
         comment_input_group.setObjectName("commentInputGroup")
@@ -177,7 +193,7 @@ class TaskDetailView(QWidget):
         self.comment_edit = ScreenshotTextEdit()
         self.comment_edit.setObjectName("commentEdit")
         self.comment_edit.setPlaceholderText("Написать комментарий...")
-        self.comment_edit.setMinimumHeight(70)
+        self.comment_edit.setFixedHeight(70)
         comment_bottom.addWidget(self.comment_edit, stretch=1)
         
         send_comment_btn = QPushButton("Отправить")
@@ -186,11 +202,11 @@ class TaskDetailView(QWidget):
         comment_bottom.addWidget(send_comment_btn)
         comment_input_layout.addWidget(ScreenshotPreview(self.comment_edit))
         comment_input_layout.addLayout(comment_bottom)
-        content_layout.addWidget(comment_input_group)
+        left_layout.addWidget(comment_input_group)
         
         comments_group = QGroupBox("Комментарии")
         comments_group.setObjectName("commentsGroup")
-        comments_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        comments_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         comments_layout = QVBoxLayout(comments_group)
         comments_layout.setContentsMargins(10, 10, 10, 10)
         comments_layout.setSpacing(10)
@@ -201,9 +217,15 @@ class TaskDetailView(QWidget):
         self.comments_container_layout.setContentsMargins(0, 0, 0, 0)
         self.comments_container_layout.setSpacing(8)
         comments_layout.addWidget(self.comments_container, 1)
-        content_layout.addWidget(comments_group, stretch=1)
+        left_layout.addWidget(comments_group)
         
-        content_layout.addStretch()
+        left_layout.addStretch()
+        right_layout.addStretch()
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
+        content_layout.addWidget(splitter, 1)
         self.scroll_area.setWidget(content_widget)
         main_layout.addWidget(self.scroll_area)
         
