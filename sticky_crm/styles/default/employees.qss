@@ -37,6 +37,41 @@ QToolButton#employeesRefreshButton {
     border-radius: 7px;
 }
 
+QPushButton#employeesInviteButton {
+    min-height: 34px;
+    padding: 0 14px;
+    color: #ffffff;
+    background: #2563eb;
+    border: 1px solid #3b82f6;
+    border-radius: 7px;
+    font-weight: 600;
+}
+
+QPushButton#employeesInviteButton:hover {
+    background: #1d4ed8;
+}
+
+QToolButton#employeesActionsButton {
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    color: #dbe7f5;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 20px;
+}
+
+QToolButton#employeesActionsButton:hover {
+    background: #243249;
+}
+
+QToolButton#employeesActionsButton::menu-indicator {
+    image: none;
+    width: 0;
+}
+
 QToolButton#employeesRefreshButton:hover {
     background: #30415d;
     border-color: #4b6385;
@@ -77,4 +112,39 @@ QLabel#employeesStateLabel {
     min-height: 80px;
     color: #94a3b8;
     font-size: 14px;
+}
+
+QDialog#employeeInvitationDialog {
+    background: #0f172a;
+}
+
+QLabel#employeeDialogTitle {
+    color: #f8fafc;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#employeeDialogNote {
+    color: #94a3b8;
+}
+
+QDialog#employeeInvitationDialog QLineEdit,
+QDialog#employeeInvitationDialog QComboBox,
+QDialog#employeeInvitationDialog QDateEdit {
+    min-height: 34px;
+    padding: 0 10px;
+    color: #e8eef7;
+    background: #111b27;
+    border: 1px solid #34445c;
+    border-radius: 7px;
+}
+
+QDialog#employeeInvitationDialog QDialogButtonBox QPushButton {
+    min-height: 34px;
+    padding: 0 14px;
+    color: #ffffff;
+    background: #2563eb;
+    border: 1px solid #3b82f6;
+    border-radius: 7px;
+    font-weight: 600;
 }

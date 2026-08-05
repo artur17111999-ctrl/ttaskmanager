@@ -26,6 +26,7 @@ from db import get_unread_notification_count, get_notifications, mark_notificati
 from sticky_notes import restore_stickies, sync_stickies
 from stickies_widget import StickiesWidget
 from access_context import coerce_access_context
+from company_widget import CompanyWidget, can_open_company_page
 from employees_widget import EmployeesWidget
 
 
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow):
         self.active_button = None
         self.page_animation = None
         self.menu_buttons = []
+        self.menu_buttons_by_title = {}
 
         # Таймер для обновления бейджа уведомлений
         self.notification_timer = QTimer(self)
@@ -121,7 +123,9 @@ class MainWindow(QMainWindow):
             ("📊  Отчёты", 0, "Отчёты"),
             ("⚙  Настройки", 0, "Настройки")
         ]
-        menu_data.insert(3, ("Сотрудники", 4, "Сотрудники"))
+        menu_data.insert(3, ("Сотрудники", 5, "Сотрудники"))
+        if can_open_company_page(self.access_context):
+            menu_data.insert(3, ("Компания", 4, "Компания"))
 
         for text, page_index, title in menu_data:
             btn = QPushButton(text)
@@ -131,6 +135,7 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda checked, idx=page_index, b=btn, t=title:
                                 self.change_page(idx, b, t))
             self.menu_buttons.append(btn)
+            self.menu_buttons_by_title[title] = btn
             menu_layout.addWidget(btn)
 
         menu_layout.addStretch()
@@ -194,10 +199,18 @@ class MainWindow(QMainWindow):
         self.stickies_page.openMessageRequested.connect(self.open_message_from_sticky)
         self.content_area.addWidget(self.stickies_page)
 
+        self.company_page = CompanyWidget(self.access_context)
+        self.company_page.companyContextChanged.connect(self._apply_company_context)
+        self.company_page.employeesRequested.connect(
+            lambda: self._open_named_page("Сотрудники")
+        )
+        self.content_area.addWidget(self.company_page)
+
         self.employees_page = EmployeesWidget(
             current_user_id=self.access_context.employee_id,
             company_id=self.access_context.company_id,
             company_name=self.access_context.company_name,
+            actor_context=self.access_context,
         )
         self.content_area.addWidget(self.employees_page)
 
@@ -245,6 +258,17 @@ class MainWindow(QMainWindow):
         self.change_page(1, self.menu_buttons[0], "Контакты")
         self.contacts_page.open_message_by_id(chat_id, message_id)
 
+    def _open_named_page(self, title):
+        button = self.menu_buttons_by_title.get(title)
+        if button is not None:
+            button.click()
+
+    def _apply_company_context(self, access_context):
+        self.access_context = coerce_access_context(access_context)
+        self.user_data = self.access_context
+        self.company_page.update_actor_context(self.access_context)
+        self.employees_page.update_actor_context(self.access_context)
+
     def mark_all_read(self):
         mark_notifications_as_read(self.user_data['employee_id'])
         self.update_notification_badge()
@@ -277,6 +301,8 @@ class MainWindow(QMainWindow):
         self.content_area.setCurrentIndex(index)
         if widget is getattr(self, 'stickies_page', None):
             self.stickies_page.reload()
+        if widget is getattr(self, 'company_page', None):
+            self.company_page.reload()
         if widget is getattr(self, 'employees_page', None):
             self.employees_page.reload()
         animation.start()

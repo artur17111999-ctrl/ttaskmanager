@@ -1,0 +1,141 @@
+QWidget#companyPage,
+QWidget#companyContent,
+QWidget#companyDialogContent {
+    background: #0f172a;
+}
+
+QFrame#companyToolbar {
+    background: #172033;
+    border-bottom: 1px solid #2b3a50;
+}
+
+QLabel#companyToolbarTitle,
+QLabel#companyDialogTitle {
+    color: #f8fafc;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QPushButton#companyPrimaryButton,
+QDialogButtonBox#companyDialogButtons QPushButton {
+    min-height: 34px;
+    padding: 0 16px;
+    color: #ffffff;
+    background: #2563eb;
+    border: 1px solid #3b82f6;
+    border-radius: 7px;
+    font-weight: 600;
+}
+
+QPushButton#companyPrimaryButton:hover,
+QDialogButtonBox#companyDialogButtons QPushButton:hover {
+    background: #1d4ed8;
+}
+
+QPushButton#companySecondaryButton {
+    min-height: 34px;
+    padding: 0 14px;
+    color: #dbe7f5;
+    background: #243249;
+    border: 1px solid #34445c;
+    border-radius: 7px;
+}
+
+QPushButton#companySecondaryButton:hover {
+    background: #30415d;
+    border-color: #4b6385;
+}
+
+QFrame#companyState {
+    background: #111b27;
+    border: 1px solid #2f3e56;
+    border-radius: 7px;
+}
+
+QLabel#companyStateTitle,
+QLabel#companyName {
+    color: #f8fafc;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+QLabel#companyStateText {
+    color: #aebed1;
+    font-size: 14px;
+    max-width: 620px;
+}
+
+QLabel#companyStatus {
+    color: #86efac;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#companyPlan {
+    color: #bfdbfe;
+    background: #1e3a5f;
+    border: 1px solid #315b89;
+    border-radius: 7px;
+    padding: 7px 12px;
+    font-weight: 600;
+}
+
+QLabel#companySectionTitle {
+    color: #dbe7f5;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+QFrame#companyMetric,
+QFrame#companyRequisites {
+    background: #111b27;
+    border: 1px solid #2f3e56;
+    border-radius: 7px;
+}
+
+QLabel#companyMetricValue {
+    color: #f8fafc;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+QLabel#companyMetricLabel,
+QLabel#companyFieldCaption,
+QLabel#companyDialogNote {
+    color: #94a3b8;
+}
+
+QLabel#companyFieldCaption {
+    min-width: 150px;
+    font-weight: 600;
+}
+
+QLabel#companyFieldValue {
+    color: #e6edf6;
+}
+
+QDialog#companyDialog,
+QScrollArea#companyDialogScroll {
+    background: #0f172a;
+    border: none;
+}
+
+QWidget#companyDialogContent QLineEdit,
+QWidget#companyDialogContent QTextEdit {
+    min-height: 34px;
+    padding: 0 11px;
+    color: #e8eef7;
+    background: #111b27;
+    border: 1px solid #34445c;
+    border-radius: 7px;
+    selection-background-color: #2563eb;
+}
+
+QWidget#companyDialogContent QTextEdit {
+    padding: 8px 11px;
+}
+
+QWidget#companyDialogContent QLineEdit:focus,
+QWidget#companyDialogContent QTextEdit:focus {
+    border-color: #3b82f6;
+}

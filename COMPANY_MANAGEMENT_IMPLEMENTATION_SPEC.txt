@@ -60,7 +60,9 @@ employee:
 - не управляет компанией и учетными записями без дополнительных permissions.
 
 Для совместимости с текущей схемой роль `company_admin` не должна использоваться как
-единственный признак доступа к карточке компании. Доступ определяется permission:
+единственный признак доступа к карточке компании. Каноническая целевая роль создателя
+компании - `company_owner`; старые записи company_admin переводятся миграцией или
+временно получают owner permission. Доступ определяется permission:
 - company.view;
 - company.manage;
 - employees.view;
@@ -73,7 +75,7 @@ employee:
 
 При миграции существующих данных необходимо явно выбрать один вариант:
 1) переименовать текущего первого company_admin в company_owner;
-2) оставить role=company_admin и назначить owner_id/permission company.manage.
+2) оставить role=company_admin и назначить owner permission company.manage.
 Рекомендуется второй вариант для совместимости с текущим кодом, с постепенным вводом
 company_owner как отдельной ролью.
 
@@ -99,7 +101,7 @@ company_owner как отдельной ролью.
    - проверяет, что пользователь не является владельцем другой активной компании;
    - создаёт company;
    - устанавливает employee.company_id;
-   - назначает company_owner или company.manage;
+   - назначает company_owner и owner permission;
    - создаёт стандартные настройки и каталоги компании;
    - записывает аудит.
 5. После commit пользователь получает новую сессию с company_id и owner permissions.
@@ -167,7 +169,7 @@ company_admin видит «Сотрудники» и все разрешённы
 - contact_email - email для связи;
 - website_url - сайт;
 - status - active, blocked или archived;
-- owner_employee_id или owner permission;
+- owner_employee_id - единственный источник текущего владельца;
 - employee_limit - текущий лимит активных сотрудников;
 - plan_code - код тарифа, пока default;
 - task_catalog_version;
@@ -301,7 +303,8 @@ company_admin видит «Сотрудники» и все разрешённы
 
 Размещение:
 - пункт «Компания» находится рядом с «Сотрудники»;
-- обычный employee не видит пункт;
+- employee с назначенной company_id не видит пункт;
+- employee без company_id видит onboarding-состояние и действие <Создать компанию>;
 - company_admin не видит пункт;
 - company_owner видит пункт;
 - system_admin видит административный пункт в отдельном системном контексте.
@@ -309,7 +312,7 @@ company_admin видит «Сотрудники» и все разрешённы
 Состояния:
 - no_company: действие «Создать компанию»;
 - company_owner: карточка компании и лимиты;
-- company_admin/employee: пункт скрыт, прямой вызов отклоняется;
+- company_admin и employee с назначенной компанией: пункт скрыт, прямой вызов отклоняется;
 - blocked/archived: только информационное состояние, вход запрещён.
 
 UI-скрытие не является защитой. Каждое действие дополнительно проверяется на API и
@@ -389,7 +392,8 @@ version gate и полная cross-tenant матрица тестов.
 Этап 1. Схема данных и миграции
 
 - добавить employee_limit, plan_code и usage-related fields;
-- добавить owner permission или owner_employee_id;
+- добавить owner_employee_id с согласованной deferred/циклической внешней связью;
+- сделать owner_employee_id и активное членство владельца согласованными ограничениями;
 - создать company_invitations;
 - создать company_membership_history;
 - создать audit_log для административных действий;

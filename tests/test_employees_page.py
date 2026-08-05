@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 import db
 import employees_widget
+from company_widget import can_open_company_page
 from employees_widget import EmployeesWidget
 
 
@@ -177,14 +179,122 @@ class EmployeesWidgetTests(unittest.TestCase):
             widget.close()
             widget.deleteLater()
 
+    def test_owner_manager_controls_use_actor_aware_service(self):
+        employee = {
+            "id": 8,
+            "full_name": "Test Employee",
+            "email": "employee@example.test",
+            "role": "employee",
+            "is_dismissed": False,
+        }
+        actor = {
+            "account_id": 1,
+            "employee_id": 42,
+            "full_name": "Company Owner",
+            "company_id": 5,
+            "company_name": "Acme",
+            "role": "company_owner",
+        }
+        with patch.object(
+            employees_widget, "list_company_employees", return_value=[employee]
+        ) as list_employees:
+            widget = EmployeesWidget(42, actor_context=actor)
+
+        try:
+            list_employees.assert_called_once_with(widget.actor, None)
+            self.assertFalse(widget.invite_button.isHidden())
+            actions_button = widget.table.cellWidget(0, 6)
+            self.assertIsNotNone(actions_button)
+            self.assertGreaterEqual(len(actions_button.menu().actions()), 2)
+        finally:
+            widget.close()
+            widget.deleteLater()
+
+    def test_delegated_admin_can_invite_and_manage_employee_state(self):
+        employee = {
+            "id": 8,
+            "full_name": "Test Employee",
+            "email": "employee@example.test",
+            "role": "employee",
+            "is_dismissed": False,
+        }
+        actor = {
+            "account_id": 1,
+            "employee_id": 42,
+            "full_name": "Delegated Admin",
+            "company_id": 5,
+            "company_name": "Acme",
+            "role": "company_admin",
+        }
+        with patch.object(
+            employees_widget, "list_company_employees", return_value=[employee]
+        ):
+            widget = EmployeesWidget(42, actor_context=actor)
+
+        try:
+            self.assertFalse(widget.invite_button.isHidden())
+            actions_button = widget.table.cellWidget(0, 6)
+            self.assertIsNotNone(actions_button)
+            self.assertEqual(len(actions_button.menu().actions()), 1)
+        finally:
+            widget.close()
+            widget.deleteLater()
+
+
+class CompanyPageVisibilityTests(unittest.TestCase):
+    @staticmethod
+    def _actor(*, company_id, role):
+        return {
+            "account_id": 1,
+            "employee_id": 42,
+            "full_name": "Test User",
+            "company_id": company_id,
+            "company_name": "Acme" if company_id is not None else None,
+            "role": role,
+        }
+
+    def test_no_company_employee_sees_onboarding(self):
+        self.assertTrue(
+            can_open_company_page(self._actor(company_id=None, role="employee"))
+        )
+
+    def test_owner_sees_company_page(self):
+        self.assertTrue(
+            can_open_company_page(
+                self._actor(company_id=5, role="company_owner")
+            )
+        )
+
+    def test_delegated_admin_does_not_see_company_page(self):
+        self.assertFalse(
+            can_open_company_page(
+                self._actor(company_id=5, role="company_admin")
+            )
+        )
+
+    def test_assigned_employee_does_not_see_company_page(self):
+        self.assertFalse(
+            can_open_company_page(self._actor(company_id=5, role="employee"))
+        )
+
 
 class EmployeesPageWiringContractTests(unittest.TestCase):
     def test_menu_index_matches_stacked_page_order(self):
         source = (APP_ROOT / "main_window.py").read_text(encoding="utf-8")
-        self.assertIn('menu_data.insert(3, ("Сотрудники", 4, "Сотрудники"))', source)
+        self.assertRegex(
+            source,
+            r"menu_data\.insert\(3,\s*\([^,\n]+,\s*5,",
+        )
+        self.assertRegex(
+            source,
+            r"if can_open_company_page\(self\.access_context\):\s*"
+            r"menu_data\.insert\(3,\s*\([^,\n]+,\s*4,",
+        )
         stickies_position = source.index("self.content_area.addWidget(self.stickies_page)")
+        company_position = source.index("self.content_area.addWidget(self.company_page)")
         employees_position = source.index("self.content_area.addWidget(self.employees_page)")
-        self.assertLess(stickies_position, employees_position)
+        self.assertLess(stickies_position, company_position)
+        self.assertLess(company_position, employees_position)
 
     def test_employees_qss_covers_page_controls(self):
         qss = (APP_ROOT / "styles" / "default" / "employees.qss").read_text(
@@ -194,7 +304,9 @@ class EmployeesPageWiringContractTests(unittest.TestCase):
             "QWidget#employeesPage",
             "QFrame#employeesToolbar",
             "QLineEdit#employeesSearch",
+            "QPushButton#employeesInviteButton",
             "QToolButton#employeesRefreshButton",
+            "QToolButton#employeesActionsButton",
             "QTableWidget#employeesTable",
             "QLabel#employeesStateLabel",
         ):
