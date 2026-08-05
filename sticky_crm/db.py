@@ -6,6 +6,30 @@ import psycopg2
 from psycopg2 import Binary
 from datetime import datetime
 from config import DB_CONFIG
+from access_context import AccessContext
+
+
+_BLOCKED_ACCESS_STATUSES = {
+    'blocked', 'archived', 'inactive', 'dismissed',
+    'заблокирована', 'заблокирован', 'архивная', 'архивный',
+    'неактивна', 'неактивен', 'уволен',
+}
+
+
+def _get_table_columns(cursor, table_name):
+    """Return columns visible through the current PostgreSQL search path."""
+    cursor.execute("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = ANY(current_schemas(FALSE))
+          AND table_name = %s
+    """, (table_name,))
+    return {row[0] for row in cursor.fetchall()}
+
+
+def _access_status_is_blocked(value):
+    return str(value or '').strip().casefold() in _BLOCKED_ACCESS_STATUSES
+
 
 def _ensure_stickies_table(cursor):
     cursor.execute("""CREATE TABLE IF NOT EXISTS stickies (
@@ -464,23 +488,57 @@ def check_user(login, password):
     if not conn:
         return False, "Ошибка подключения к базе данных"
 
+    cursor = None
     try:
         cursor = conn.cursor()
+        employee_columns = _get_table_columns(cursor, 'employees')
+        company_columns = _get_table_columns(cursor, 'companies')
 
-        cursor.execute("""
-                       SELECT a.id,
-                              a.password_hash,
-                              a.is_locked,
-                              e.id as employee_id,
-                              e.last_name,
-                              e.first_name,
-                              e.middle_name,
-                              e.email,
-                              e.is_dismissed
-                       FROM accounts a
-                                JOIN employees e ON a.employee_id = e.id
-                       WHERE a.login = %s
-                       """, (login,))
+        has_employee_company = 'company_id' in employee_columns
+        has_companies = bool(company_columns) and has_employee_company
+        company_join = (
+            "LEFT JOIN companies company ON company.id = e.company_id"
+            if has_companies else ""
+        )
+        company_id_expr = "e.company_id" if has_employee_company else "NULL::INTEGER"
+        company_name_expr = (
+            "company.name" if has_companies and 'name' in company_columns
+            else "NULL::VARCHAR"
+        )
+        role_expr = (
+            "COALESCE(e.role::text, 'employee')" if 'role' in employee_columns
+            else "'employee'::VARCHAR"
+        )
+        employee_status_expr = (
+            "COALESCE(e.status::text, CASE WHEN e.is_dismissed THEN 'dismissed' ELSE 'active' END)"
+            if 'status' in employee_columns
+            else "CASE WHEN e.is_dismissed THEN 'dismissed' ELSE 'active' END"
+        )
+        company_status_expr = (
+            "company.status::text" if has_companies and 'status' in company_columns
+            else "NULL::VARCHAR"
+        )
+
+        cursor.execute(f"""
+            SELECT a.id,
+                   a.password_hash,
+                   a.is_locked,
+                   e.id AS employee_id,
+                   e.last_name,
+                   e.first_name,
+                   e.middle_name,
+                   e.email,
+                   e.is_dismissed,
+                   {company_id_expr} AS company_id,
+                   {company_name_expr} AS company_name,
+                   {role_expr} AS role,
+                   {employee_status_expr} AS employee_status,
+                   {company_status_expr} AS company_status
+            FROM accounts a
+            JOIN employees e ON a.employee_id = e.id
+            {company_join}
+            WHERE a.login = %s
+        """, (login,))
 
         result = cursor.fetchone()
 
@@ -488,34 +546,47 @@ def check_user(login, password):
             return False, "Неверный логин или пароль"
 
         (account_id, password_hash, is_locked, emp_id,
-         last_name, first_name, middle_name, email, is_dismissed) = result
-
-        if is_locked:
-            return False, "Учетная запись заблокирована"
-
-        if is_dismissed:
-            return False, "Сотрудник уволен"
+         last_name, first_name, middle_name, email, is_dismissed,
+         company_id, company_name, role, employee_status,
+         company_status) = result
 
         # Проверяем пароль через bcrypt
         if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
             return False, "Неверный логин или пароль"
 
-        user_data = {
-            'account_id': account_id,
-            'employee_id': emp_id,
-            'last_name': last_name,
-            'first_name': first_name,
-            'middle_name': middle_name,
-            'email': email,
-            'full_name': f"{last_name} {first_name} {middle_name or ''}".strip()
-        }
+        if is_locked:
+            return False, "Учетная запись заблокирована"
+
+        if is_dismissed or _access_status_is_blocked(employee_status):
+            return False, "Сотрудник не имеет доступа к системе"
+
+        if _access_status_is_blocked(company_status):
+            return False, "Компания не имеет доступа к системе"
+
+        user_data = AccessContext(
+            account_id=account_id,
+            employee_id=emp_id,
+            last_name=last_name,
+            first_name=first_name,
+            middle_name=middle_name,
+            email=email,
+            full_name=f"{last_name} {first_name} {middle_name or ''}".strip(),
+            company_id=company_id,
+            company_name=company_name,
+            role=role or 'employee',
+            status=employee_status or 'active',
+            company_status=company_status,
+            principal_trusted=False,
+        )
 
         return True, user_data
 
     except Exception as e:
-        return False, f"Ошибка: {str(e)}"
+        print(f"Ошибка авторизации: {e}")
+        return False, "Ошибка авторизации"
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
         conn.close()
 
 
@@ -656,6 +727,74 @@ def get_employees(search_query=None):
         return []
     finally:
         cursor.close()
+        conn.close()
+
+
+def get_company_employees(actor_user_id, search_query=None):
+    """Return employees from the actor's company only.
+
+    This is a compatibility foundation for the desktop client. The actor id is not a
+    security boundary until requests are derived from a trusted server-side session.
+    """
+    conn = get_connection()
+    if not conn:
+        return []
+
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        params = [actor_user_id]
+        search_clause = ""
+        if search_query:
+            search_clause = """
+                AND (
+                    e.last_name ILIKE %s OR
+                    e.first_name ILIKE %s OR
+                    COALESCE(e.middle_name, '') ILIKE %s OR
+                    COALESCE(e.email, '') ILIKE %s
+                )
+            """
+            search_value = f"%{search_query}%"
+            params.extend([search_value] * 4)
+
+        cursor.execute(f"""
+            SELECT e.id,
+                   CONCAT_WS(' ', e.last_name, e.first_name, NULLIF(e.middle_name, '')),
+                   p.title,
+                   d.title,
+                   e.email,
+                   COALESCE(e.role, 'employee'),
+                   COALESCE(e.is_dismissed, FALSE)
+            FROM employees e
+            LEFT JOIN positions p ON p.id = e.position_id
+            LEFT JOIN departments d ON d.id = e.department_id
+            WHERE e.company_id = (
+                SELECT actor.company_id
+                FROM employees actor
+                WHERE actor.id = %s
+            )
+            {search_clause}
+            ORDER BY e.is_dismissed, e.last_name, e.first_name, e.id
+        """, tuple(params))
+
+        return [
+            {
+                'id': row[0],
+                'full_name': row[1],
+                'position': row[2],
+                'department': row[3],
+                'email': row[4],
+                'role': row[5],
+                'is_dismissed': row[6],
+            }
+            for row in cursor.fetchall()
+        ]
+    except Exception as error:
+        print(f"Ошибка получения сотрудников компании: {error}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
         conn.close()
 
 def create_group_chat(name, creator_id, member_ids):

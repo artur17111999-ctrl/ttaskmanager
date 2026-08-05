@@ -1,0 +1,80 @@
+QWidget#employeesPage,
+QWidget#employeesContent {
+    background: #0f172a;
+}
+
+QFrame#employeesToolbar {
+    background: #172033;
+    border-bottom: 1px solid #2b3a50;
+}
+
+QLabel#employeesCompanyLabel {
+    color: #f8fafc;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QLineEdit#employeesSearch {
+    min-height: 34px;
+    padding: 0 12px;
+    color: #e8eef7;
+    background: #111b27;
+    border: 1px solid #34445c;
+    border-radius: 7px;
+}
+
+QLineEdit#employeesSearch:focus {
+    border-color: #3b82f6;
+}
+
+QToolButton#employeesRefreshButton {
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    background: #243249;
+    border: 1px solid #34445c;
+    border-radius: 7px;
+}
+
+QToolButton#employeesRefreshButton:hover {
+    background: #30415d;
+    border-color: #4b6385;
+}
+
+QTableWidget#employeesTable {
+    color: #e6edf6;
+    background: #111b27;
+    alternate-background-color: #162235;
+    border: 1px solid #2f3e56;
+    border-radius: 7px;
+    selection-background-color: #234b83;
+    selection-color: #ffffff;
+    outline: none;
+}
+
+QTableWidget#employeesTable::item {
+    padding: 7px 9px;
+    border-bottom: 1px solid #243249;
+}
+
+QTableWidget#employeesTable::item:hover {
+    background: #1e3048;
+}
+
+QTableWidget#employeesTable QHeaderView::section {
+    min-height: 36px;
+    padding: 0 9px;
+    color: #b9c8da;
+    background: #1b293d;
+    border: none;
+    border-right: 1px solid #2f3e56;
+    border-bottom: 1px solid #34445c;
+    font-weight: 600;
+}
+
+QLabel#employeesStateLabel {
+    min-height: 80px;
+    color: #94a3b8;
+    font-size: 14px;
+}

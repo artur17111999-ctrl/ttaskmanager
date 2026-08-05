@@ -25,12 +25,15 @@ from tasks_widget import TasksWidget
 from db import get_unread_notification_count, get_notifications, mark_notifications_as_read
 from sticky_notes import restore_stickies, sync_stickies
 from stickies_widget import StickiesWidget
+from access_context import coerce_access_context
+from employees_widget import EmployeesWidget
 
 
 class MainWindow(QMainWindow):
     def __init__(self, user_data):
         super().__init__()
-        self.user_data = user_data
+        self.access_context = coerce_access_context(user_data)
+        self.user_data = self.access_context
         self.active_button = None
         self.page_animation = None
         self.menu_buttons = []
@@ -118,6 +121,7 @@ class MainWindow(QMainWindow):
             ("📊  Отчёты", 0, "Отчёты"),
             ("⚙  Настройки", 0, "Настройки")
         ]
+        menu_data.insert(3, ("Сотрудники", 4, "Сотрудники"))
 
         for text, page_index, title in menu_data:
             btn = QPushButton(text)
@@ -189,6 +193,13 @@ class MainWindow(QMainWindow):
         self.stickies_page.openTaskRequested.connect(self.open_task_from_sticky)
         self.stickies_page.openMessageRequested.connect(self.open_message_from_sticky)
         self.content_area.addWidget(self.stickies_page)
+
+        self.employees_page = EmployeesWidget(
+            current_user_id=self.access_context.employee_id,
+            company_id=self.access_context.company_id,
+            company_name=self.access_context.company_name,
+        )
+        self.content_area.addWidget(self.employees_page)
 
         right_layout.addWidget(self.content_area, 1)
 
@@ -266,6 +277,8 @@ class MainWindow(QMainWindow):
         self.content_area.setCurrentIndex(index)
         if widget is getattr(self, 'stickies_page', None):
             self.stickies_page.reload()
+        if widget is getattr(self, 'employees_page', None):
+            self.employees_page.reload()
         animation.start()
 
         def cleanup():
