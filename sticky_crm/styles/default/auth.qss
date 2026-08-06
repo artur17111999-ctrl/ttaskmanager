@@ -65,6 +65,17 @@ QPushButton[text="Регистрация"]:hover {
     background: #43dd83;
 }
 
+QPushButton#acceptInvitationButton {
+    color: #dbe7f5;
+    background: #243249;
+    border: 1px solid #3b4b64;
+}
+
+QPushButton#acceptInvitationButton:hover {
+    background: #30415d;
+    border-color: #4b6385;
+}
+
 /* Сообщения об ошибках */
 QLabel[objectName="error_label"] {
     color: #ff5d73;

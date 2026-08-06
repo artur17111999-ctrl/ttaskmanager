@@ -9,13 +9,14 @@ class MigrationRunnerTests(unittest.TestCase):
     def test_managed_migrations_start_at_ten_and_are_contiguous(self):
         migrations = migration_runner.discover_migrations()
 
-        self.assertEqual([item.version for item in migrations], [10, 11, 12])
+        self.assertEqual([item.version for item in migrations], [10, 11, 12, 13])
         self.assertEqual(
             [item.name for item in migrations],
             [
                 "010_create_companies.sql",
                 "011_add_release1_tenant_columns.sql",
                 "012_company_management.sql",
+                "013_invitation_acceptance.sql",
             ],
         )
         self.assertTrue(all(len(item.checksum) == 64 for item in migrations))

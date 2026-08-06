@@ -78,6 +78,7 @@ def _login_row(
     role="company_admin",
     employee_status="active",
     company_status="active",
+    account_status="active",
     is_locked=False,
     is_dismissed=False,
 ):
@@ -96,6 +97,7 @@ def _login_row(
         role,
         employee_status,
         company_status,
+        account_status,
     )
 
 
@@ -211,6 +213,19 @@ class CheckUserAccessContextTests(unittest.TestCase):
 
         self.assertFalse(success)
         self.assertEqual(message, "Неверный логин или пароль")
+
+    def test_blocked_account_cannot_log_in(self):
+        columns = {
+            "accounts": {"status"},
+            "employees": {"company_id", "role", "status", "is_dismissed"},
+            "companies": {"id", "name", "status"},
+        }
+        success, message = self._run_check_user(
+            columns, _login_row(account_status="blocked")
+        )[0]
+
+        self.assertFalse(success)
+        self.assertEqual(message, "Учетная запись не активна")
 
 
 if __name__ == "__main__":

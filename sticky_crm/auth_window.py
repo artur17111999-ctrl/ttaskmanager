@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QCheckBox
 )
 from PySide6.QtCore import Qt, QSettings
+from invitation_accept_dialog import InvitationAcceptDialog
 from register_window import RegisterWindow
 
 
@@ -13,7 +14,7 @@ class AuthWindow(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Вход в систему")
-        self.setFixedSize(400, 400)
+        self.setFixedSize(400, 455)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
 
         self.user_data = None
@@ -65,6 +66,11 @@ class AuthWindow(QDialog):
         self.register_button.setMinimumHeight(35)
         self.register_button.clicked.connect(self.open_register)
 
+        self.invitation_button = QPushButton("Принять приглашение")
+        self.invitation_button.setObjectName("acceptInvitationButton")
+        self.invitation_button.setMinimumHeight(35)
+        self.invitation_button.clicked.connect(self.open_invitation)
+
         # Собираем layout
         layout.addWidget(title)
         layout.addSpacing(5)
@@ -76,6 +82,7 @@ class AuthWindow(QDialog):
         layout.addWidget(self.error_label)
         layout.addSpacing(5)
         layout.addWidget(self.login_button)
+        layout.addWidget(self.invitation_button)
         layout.addWidget(self.register_button)
 
         self.setLayout(layout)
@@ -106,24 +113,23 @@ class AuthWindow(QDialog):
         else:
             self.show_error(result)
 
-    def save_credentials(self, login, password):
-        """Сохранение учётных данных."""
+    def save_credentials(self, login, password=None):
+        """Запомнить только логин; пароли не хранятся в QSettings."""
+        self.settings.remove("password")
         if self.remember_checkbox.isChecked():
             self.settings.setValue("login", login)
-            self.settings.setValue("password", password)
             self.settings.setValue("remember", True)
         else:
             self.settings.remove("login")
-            self.settings.remove("password")
             self.settings.setValue("remember", False)
 
     def load_saved_credentials(self):
         """Загрузка сохранённых учётных данных."""
+        # Удаляем plaintext-пароль, который мог остаться от старых версий.
+        self.settings.remove("password")
         if self.settings.value("remember", False, type=bool):
             login = self.settings.value("login", "")
-            password = self.settings.value("password", "")
             self.login_input.setText(login)
-            self.password_input.setText(password)
             self.remember_checkbox.setChecked(True)
 
     def show_error(self, message):
@@ -135,3 +141,11 @@ class AuthWindow(QDialog):
         """Открыть окно регистрации."""
         register = RegisterWindow(self)
         register.exec()
+
+    def open_invitation(self):
+        """Открыть защищённый сценарий принятия приглашения."""
+        dialog = InvitationAcceptDialog(self)
+        if dialog.exec() == QDialog.Accepted and dialog.created_login:
+            self.login_input.setText(dialog.created_login)
+            self.password_input.clear()
+            self.login_input.setFocus()

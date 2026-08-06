@@ -1,0 +1,97 @@
+QDialog#invitationAcceptDialog {
+    background: #111827;
+}
+
+QLabel#invitationTitle {
+    color: #f8fafc;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+QLabel#invitationSubtitle {
+    color: #aebbd0;
+    font-size: 13px;
+}
+
+QFrame#invitationTokenFrame,
+QFrame#invitationPreviewFrame,
+QFrame#invitationAccountFrame {
+    background: #172033;
+    border: 1px solid #2f3e56;
+    border-radius: 7px;
+}
+
+QLabel#invitationFieldLabel,
+QLabel#invitationSectionTitle {
+    color: #f1f5f9;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#invitationPreviewValue {
+    color: #dbe7f5;
+}
+
+QLabel#invitationError {
+    color: #fecaca;
+    background: #3b1d27;
+    border: 1px solid #7f1d1d;
+    border-radius: 6px;
+    padding: 9px 11px;
+}
+
+QDialog#invitationAcceptDialog QLineEdit,
+QDialog#invitationAcceptDialog QDateEdit {
+    min-height: 34px;
+    padding: 0 11px;
+    color: #edf3fb;
+    background: #111b27;
+    border: 1px solid #34445c;
+    border-radius: 6px;
+    selection-background-color: #2563eb;
+}
+
+QDialog#invitationAcceptDialog QLineEdit:focus,
+QDialog#invitationAcceptDialog QDateEdit:focus {
+    border-color: #3b82f6;
+}
+
+QCheckBox#invitationConsent {
+    color: #dbe7f5;
+    spacing: 8px;
+}
+
+QPushButton#invitationInspectButton,
+QPushButton#invitationAcceptButton {
+    min-height: 36px;
+    padding: 0 16px;
+    color: #ffffff;
+    background: #2563eb;
+    border: 1px solid #3b82f6;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+QPushButton#invitationInspectButton:hover,
+QPushButton#invitationAcceptButton:hover {
+    background: #1d4ed8;
+}
+
+QPushButton#invitationCancelButton {
+    min-height: 36px;
+    padding: 0 16px;
+    color: #dbe7f5;
+    background: #243249;
+    border: 1px solid #34445c;
+    border-radius: 6px;
+}
+
+QPushButton#invitationCancelButton:hover {
+    background: #30415d;
+}
+
+QDialog#invitationAcceptDialog QPushButton:disabled {
+    color: #8090a7;
+    background: #263246;
+    border-color: #34445c;
+}

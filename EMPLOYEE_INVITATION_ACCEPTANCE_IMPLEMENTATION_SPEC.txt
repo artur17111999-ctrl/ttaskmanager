@@ -1,0 +1,848 @@
+ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+ПРИНЯТИЕ ПРИГЛАШЕНИЯ, СОЗДАНИЕ УЧЁТНОЙ ЗАПИСИ
+И ПЕРВЫЙ ВХОД СОТРУДНИКА
+
+Проект: Sticky CRM
+Версия документа: 1.0
+Дата: 05.08.2026
+Статус: ТЗ для реализации
+
+
+1. НАЗНАЧЕНИЕ
+
+Реализовать безопасный сценарий, при котором приглашённый сотрудник:
+- получает одноразовый код или ссылку;
+- самостоятельно задаёт логин и пароль;
+- не выбирает company_id или роль;
+- атомарно присоединяется к компании из приглашения;
+- получает employee, account, роль и активное членство;
+- входит в приложение через обычную форму авторизации.
+
+Документ дополняет:
+- COMPANY_MANAGEMENT_IMPLEMENTATION_SPEC.txt;
+- COMPANIES_ROLES_IMPLEMENTATION_PLAN.txt;
+- миграции 010, 011 и 012;
+- company_service.py;
+- текущую форму регистрации RegisterWindow.
+
+
+2. ТЕКУЩЕЕ СОСТОЯНИЕ
+
+Уже реализовано:
+- таблица company_invitations;
+- хранение только SHA-256 hash токена;
+- profile_data с ФИО, датой начала работы, должностью и подразделением;
+- резервирование места в лимите;
+- отзыв, истечение и одноразовость приглашения на уровне модели данных;
+- сервис create_invitation();
+- токен показывается администратору один раз;
+- pending-приглашения видны в реестре сотрудников.
+
+Не реализовано:
+- ввод кода приглашённым сотрудником;
+- проверка и принятие токена;
+- атомарное создание employee и account;
+- привязка к company_id из приглашения;
+- отметка accepted_at;
+- экран первого входа;
+- доставка приглашений по email;
+- повторная отправка и замена токена;
+- полноценная server-side auth boundary.
+
+
+3. БАЗОВЫЕ РЕШЕНИЯ
+
+3.1. Токен как одноразовое право
+
+- Токен приглашения является capability secret.
+- Длина случайной части: не менее 256 бит.
+- Формат: URL-safe, без предсказуемых частей.
+- В БД хранится только SHA-256 hash.
+- Исходный токен не попадает в audit, log, exception, crash report и telemetry.
+- Срок жизни MVP: 7 дней.
+- После принятия, отзыва или повторной отправки старый токен недействителен.
+
+3.2. Источник company_id и роли
+
+- company_id вычисляется только по company_invitations.company_id.
+- Клиент не может передать company_id в accept request.
+- Роль берётся только из requested_role.
+- company_owner и system_admin не могут быть назначены через обычное приглашение.
+- company_admin может быть указан только в приглашении, созданном company_owner.
+
+3.3. Пароль
+
+- Администратор не задаёт пароль сотрудника.
+- Пароль вводится только на стороне приглашённого пользователя.
+- Пароль не логируется и не сохраняется в QSettings.
+- Для новых реализаций рекомендован Argon2id.
+- На переходном этапе допустим bcrypt с актуальным cost factor.
+- Пароль не передаётся в аналитику и не включается в audit metadata.
+
+
+4. РОЛИ И ПРАВА
+
+company_owner:
+- создаёт приглашения employee и company_admin;
+- отзывает и повторно отправляет приглашения;
+- видит статус доставки и принятия;
+- не видит токен после первичной выдачи.
+
+company_admin:
+- создаёт только employee-приглашения;
+- может отозвать созданное им приглашение или любое приглашение при наличии permission employees.invite.manage;
+- не может повысить роль до company_admin.
+
+employee:
+- принимает приглашение без авторизованной сессии, используя токен;
+- не может изменить company_id, requested_role, position_id, department_id и start_date;
+- может уточнить личные данные, если это разрешено политикой компании.
+
+system_admin:
+- не получает прямой доступ к токену;
+- может отозвать приглашение только через аудируемый server-side support flow;
+- все действия выполняет в явно выбранном company context.
+
+
+5. ПОЛЬЗОВАТЕЛЬСКИЕ СЦЕНАРИИ
+
+5.1. Новый сотрудник без учётной записи
+
+1. Администратор создаёт приглашение.
+2. Сотрудник получает код или ссылку.
+3. В AuthWindow нажимает <Принять приглашение>.
+4. Вводит токен.
+5. После безопасной проверки видит название компании, свой email и подготовленный профиль.
+6. Указывает логин, пароль и подтверждение пароля.
+7. Подтверждает принятие политики конфиденциальности.
+8. Система атомарно создаёт employee, account и membership history.
+9. Приглашение становится accepted.
+10. Пользователь входит с новыми данными или получает новую сессию после commit.
+
+5.2. Повторное нажатие
+
+- Кнопка принятия отключается на время запроса.
+- Два параллельных accept-запроса не создают два account или employee.
+- Повтор с тем же Idempotency-Key возвращает ранее завершённый результат.
+- Повтор без идемпотентного ключа после commit даёт общее сообщение о недействительном или уже использованном коде.
+
+5.3. Истёкшее, отозванное или использованное приглашение
+
+- Внешний ответ одинаковый: <Приглашение недействительно или срок его действия истёк>.
+- Не раскрывается, был ли токен создан, отозван, принят или истёк.
+- Повторное приглашение создаёт новый токен, а не продлевает старый.
+
+5.4. Компания заблокирована или архивирована
+
+- Принятие блокируется.
+- Новые account и employee не создаются.
+- Приглашение не помечается accepted.
+- В аудите фиксируется отказ без записи токена.
+
+
+6. UI/UX
+
+6.1. AuthWindow
+
+Добавить отдельную команду:
+- <Принять приглашение>.
+
+Кнопка не должна подменять обычную регистрацию. Должно быть три ясных сценария:
+- <Войти>;
+- <Создать личную учётную запись>;
+- <Принять приглашение>.
+
+6.2. InvitationAcceptDialog
+
+Шаг 1. Код
+- поле одноразового кода;
+- вставка из буфера;
+- скрытие кода после успешной проверки;
+- запрет автосохранения в QSettings.
+
+Шаг 2. Проверка данных
+- название компании;
+- email, для которого создано приглашение;
+- ФИО;
+- должность;
+- подразделение;
+- дата начала работы;
+- роль в читаемом виде.
+
+До окончательного accept preview не должен раскрывать лишние реквизиты компании, список сотрудников или лимит.
+
+Шаг 3. Учётная запись
+- логин;
+- пароль;
+- подтверждение пароля;
+- согласие с политикой;
+- кнопка <Принять и создать учётную запись>.
+
+Шаг 4. Успех
+- сообщение <Учётная запись создана>;
+- кнопка <Войти>;
+- автовход допустим только при выдаче server-side session после commit.
+
+6.3. Состояния UI
+
+- loading;
+- invalid_or_expired;
+- revoked;
+- already_accepted;
+- company_unavailable;
+- login_conflict;
+- email_conflict;
+- password_invalid;
+- server_unavailable;
+- success.
+
+Для invalid, expired, revoked и already accepted внешний текст должен быть одинаковым.
+
+
+7. ИЗМЕНЕНИЯ БАЗЫ ДАННЫХ
+
+7.1. Новая миграция
+
+Создать отдельную миграцию:
+- 013_invitation_acceptance.sql.
+
+Миграцию 012 не изменять после её применения в любом контуре.
+
+7.2. company_invitations
+
+Добавить:
+- accepted_employee_id INTEGER NULL;
+- accepted_account_id INTEGER NULL, если account не определяется однозначно по employee_id;
+- superseded_by_id BIGINT NULL для ротации приглашений;
+- last_sent_at TIMESTAMP NULL;
+- delivery_status VARCHAR(30) NOT NULL DEFAULT 'manual';
+- acceptance_request_id VARCHAR(100) NULL или отдельную таблицу idempotency requests.
+
+Ограничения:
+- accepted_employee_id должен принадлежать company_id приглашения;
+- при accepted_at IS NOT NULL accepted_employee_id IS NOT NULL;
+- accepted_at и revoked_at не могут быть заполнены одновременно;
+- superseded_by_id не равен id;
+- токен hash уникален;
+- повторное accepted_employee_id для разных активных приглашений запрещено в рамках текущей one-company модели.
+
+7.3. accounts
+
+Проверить и добавить при отсутствии:
+- UNIQUE(employee_id);
+- нормализованную уникальность login;
+- status: pending, active, blocked;
+- password_changed_at;
+- session_generation NOT NULL DEFAULT 0;
+- created_at, updated_at;
+- last_login_at;
+- email_verified_at для будущей email-verification.
+
+Перед добавлением UNIQUE выполнить аудит дублей. Не удалять дубли автоматически.
+
+7.4. employees
+
+Проверить:
+- уникальность normalized email в рамках текущей модели;
+- NOT NULL company_id только после backfill/cutover;
+- связь role с ролевой моделью;
+- запрет изменения company_id прикладным клиентом;
+- source_invitation_id или связь через membership history.
+
+7.5. Idempotency
+
+Целевой вариант для API:
+- таблица idempotency_requests;
+- key_hash;
+- operation;
+- principal/invitation_id;
+- request_hash;
+- response_code;
+- response_body без секретов;
+- created_at;
+- expires_at;
+- UNIQUE(operation, key_hash).
+
+
+8. СЕРВИСНЫЙ СЛОЙ
+
+8.1. Новые операции
+
+Добавить:
+- inspect_invitation(token);
+- accept_invitation(token, account_data, idempotency_key=None);
+- revoke_invitation(actor, invitation_id);
+- resend_invitation(actor, invitation_id);
+- cleanup_expired_invitations(batch_size);
+
+Сервис не принимает company_id от неавторизованного клиента.
+
+8.2. inspect_invitation
+
+Вход:
+- raw token.
+
+Выход при успехе:
+- opaque preview_id с коротким TTL;
+- company display name;
+- masked или полный email после доказательства владения токеном;
+- profile data;
+- requested role title;
+- expires_at.
+
+Не возвращать:
+- company_id;
+- employee_limit;
+- owner_employee_id;
+- полные юридические реквизиты;
+- список сотрудников;
+- token_hash;
+- причину невалидности токена.
+
+8.3. accept_invitation
+
+Вход:
+- raw token или preview_id + proof;
+- login;
+- password;
+- password_confirmation проверяется на клиенте, но не обязана передаваться дважды;
+- разрешённые поля личного профиля;
+- policy_version;
+- Idempotency-Key.
+
+Запрещено принимать:
+- company_id;
+- role;
+- owner_employee_id;
+- employee_limit;
+- is_dismissed;
+- account status;
+- position_id/department_id, если они административные.
+
+8.4. Планируемый API
+
+- POST /v1/invitations/inspect;
+- POST /v1/invitations/accept;
+- POST /v1/company/invitations/{id}/revoke;
+- POST /v1/company/invitations/{id}/resend;
+- GET /v1/company/invitations;
+
+Все admin endpoints требуют trusted session, permission и server-derived company context.
+
+
+9. АТОМАРНЫЙ АЛГОРИТМ ПРИНЯТИЯ
+
+Все шаги выполняются в одной транзакции.
+
+1. Проверить rate limit до дорогих DB-операций.
+2. Нормализовать токен без его логирования.
+3. Вычислить SHA-256.
+4. Предварительно найти invitation_id и company_id по hash, не раскрывая их клиенту.
+5. BEGIN.
+6. SELECT company FOR UPDATE.
+7. SELECT invitation FOR UPDATE по id, company_id и token_hash.
+8. Повторно проверить:
+   - accepted_at IS NULL;
+   - revoked_at IS NULL;
+   - expires_at > CURRENT_TIMESTAMP;
+   - company.status = active;
+   - superseded_by_id IS NULL;
+   - requested_role разрешён.
+9. Проверить Idempotency-Key и request hash.
+10. Посчитать active employees и другие pending invitations.
+11. Текущее приглашение уже резервирует место, поэтому accept не должен требовать ещё одно свободное место.
+12. Проверить, что active_count + reserved_count <= employee_limit.
+13. Проверить уникальность normalized email и login.
+14. Проверить position/department в контексте компании, когда справочники станут tenant-scoped.
+15. Хешировать пароль.
+16. Создать employee с company_id и requested_role.
+17. Создать account с password_hash и status=active.
+18. Создать company_membership_history с source_invitation_id.
+19. Обновить company_invitations:
+   - accepted_at = CURRENT_TIMESTAMP;
+   - accepted_employee_id = employee.id;
+   - accepted_account_id = account.id, если поле используется.
+20. Записать audit_log без token, token_hash и password data.
+21. Записать idempotency result.
+22. COMMIT.
+23. Только после commit выдать сессию или показать успех.
+
+Порядок блокировок company -> invitation должен быть одинаковым в accept, revoke, resend и cleanup, чтобы снизить риск deadlock.
+
+
+10. ВАЛИДАЦИЯ
+
+10.1. Токен
+
+- ограничение длины до хеширования;
+- только допустимый URL-safe набор символов;
+- одинаковый ответ для неизвестного, истёкшего, отозванного и принятого токена.
+
+10.2. Логин
+
+- trim и Unicode normalization;
+- согласованная case sensitivity;
+- длина 3-100 символов;
+- запрет control characters;
+- уникальность на уровне БД;
+- не сообщать до inspect, занят ли конкретный login.
+
+10.3. Пароль
+
+- минимум 10-12 символов для новой политики;
+- разрешить password manager passphrases и Unicode;
+- не требовать обязательной смены пароля по расписанию;
+- проверять по breach-list в server-side контуре без передачи полного пароля третьей стороне;
+- защищать от чрезмерного размера входа.
+
+
+11. БЕЗОПАСНОСТЬ
+
+11.1. Модель угроз
+
+Покрыть:
+- подбор токена;
+- кража токена из логов, URL history и clipboard;
+- повторное использование;
+- параллельное принятие;
+- обход лимита 15;
+- подмена company_id;
+- повышение роли;
+- привязка к чужой компании;
+- создание двух accounts;
+- user/email enumeration;
+- SQL injection;
+- подмена позиции или подразделения;
+- принятие в заблокированную компанию;
+- обход отзыва приглашения;
+- доступ старого клиента без новых permission checks.
+
+11.2. Rate limiting
+
+Минимально:
+- inspect: лимит по IP/device и префиксу hash;
+- accept: более строгий лимит;
+- exponential backoff;
+- короткая блокировка после нескольких ошибок;
+- метрика всплеска невалидных токенов;
+- CAPTCHA только в web-контуре и после risk threshold.
+
+11.3. Защита от enumeration
+
+- Одинаковые HTTP status и сообщения для invalid/expired/revoked/accepted.
+- Не сообщать до валидного token proof, есть ли email в системе.
+- Не раскрывать tenant existence.
+- Время ответа не должно существенно отличаться между основными error paths.
+
+11.4. Хранение секретов
+
+- Не хранить password и invitation token в QSettings.
+- Не хранить raw token в БД.
+- Не писать raw token в URL query string; для web предпочитать fragment с последующим POST.
+- Не помещать токен в Referer.
+- При custom desktop deep link учитывать OS logs и перехват схемы.
+- Для <Запомнить меня> хранить только login или refresh token в Windows Credential Manager.
+
+11.5. Критичная доработка текущего AuthWindow
+
+Сейчас AuthWindow может сохранять password в QSettings в открытом виде.
+Перед выпуском invitation flow необходимо:
+- удалить сохранение password из QSettings;
+- удалить уже сохранённые password values при обновлении;
+- оставить запоминание только login;
+- либо внедрить refresh token через Windows Credential Manager;
+- добавить security regression test.
+
+11.6. Текущий direct PostgreSQL client
+
+Текущая модель, где desktop-клиент имеет общие учётные данные PostgreSQL, не является полноценной security boundary.
+
+Для production необходимо:
+- server API или изолированные SECURITY DEFINER DB functions;
+- прикладная DB role без SELECT/INSERT/UPDATE/DELETE на базовые таблицы;
+- trusted principal из server-side session;
+- запрет доверия к actor_user_id из клиента;
+- TLS между клиентом и API;
+- version gate для блокировки старых клиентов.
+
+До этого invitation flow может считаться development/staging функцией, но не полной production security boundary.
+
+
+12. ЛИМИТ И КОНКУРЕНТНОСТЬ
+
+- Pending invitation уже занимает одно место.
+- При accept резерв превращается в active employee без увеличения used_count.
+- Нельзя сначала пометить invitation accepted, commit, а затем создавать employee.
+- Нельзя создавать account в отдельной транзакции.
+- Все invitation operations блокируют company row.
+- Тест с 20-100 параллельными accept requests должен создать ровно один employee и account.
+- Параллельные revoke и accept дают ровно один финальный результат.
+- Параллельное сокращение employee_limit не должно создавать новое превышение.
+
+
+13. ОТЗЫВ И ПОВТОРНАЯ ОТПРАВКА
+
+13.1. Отзыв
+
+- Только owner/admin с permission.
+- Вывод company_id из actor context.
+- SELECT company FOR UPDATE.
+- SELECT invitation FOR UPDATE.
+- Проверка, что invitation не accepted и не revoked.
+- revoked_at = CURRENT_TIMESTAMP.
+- Освобождение резерва после commit.
+- Аудит без токена.
+
+13.2. Повторная отправка
+
+- Старое приглашение отзывается или помечается superseded.
+- Создаётся новая invitation row с новым token hash.
+- Профиль копируется после повторной server-side валидации.
+- Новый токен выдаётся один раз.
+- Не создаётся второй резерв места.
+- В audit связываются old invitation id и new invitation id.
+
+
+14. АУДИТ И ЖУРНАЛИРОВАНИЕ
+
+События:
+- invitation.inspected_success;
+- invitation.accepted;
+- invitation.accept_failed;
+- invitation.revoked;
+- invitation.resent;
+- invitation.expired;
+- employee.created_from_invitation;
+- account.created_from_invitation;
+- security.invitation_rate_limited.
+
+Не записывать:
+- raw token;
+- token_hash целиком;
+- password;
+- password_hash;
+- password confirmation;
+- session token;
+- refresh token.
+
+Допустимо:
+- invitation_id;
+- company_id в защищённом audit-контуре;
+- accepted_employee_id;
+- actor_employee_id для admin operations;
+- request_id;
+- error category без деталей секрета;
+- IP/device risk metadata согласно политике приватности.
+
+
+15. ТЕСТИРОВАНИЕ
+
+15.1. Unit-тесты
+
+- нормализация токена;
+- hashing;
+- валидация login;
+- валидация password;
+- запрет company_id/role в request;
+- проверка requested_role;
+- расчёт лимита при конвертации pending -> active;
+- generic error mapping;
+- idempotency request hashing;
+- запрет логирования секретов.
+
+15.2. Интеграционные тесты
+
+- валидное приглашение создаёт ровно один employee;
+- создаёт ровно один account;
+- employee.company_id равен invitation.company_id;
+- employee.role равен requested_role;
+- accepted_at и accepted_employee_id заполнены;
+- membership history создана;
+- audit создан;
+- raw token отсутствует в audit;
+- повторный accept не создаёт дубли;
+- revoked/expired invitation не создаёт данные;
+- blocked company не принимает invitation;
+- дубль login откатывает всю транзакцию;
+- дубль email не раскрывает tenant;
+- невалидная position/department отклоняется или переводится в безопасное NULL по утверждённой политике.
+
+15.3. Concurrency-тесты
+
+- 50 параллельных accept одного token;
+- accept против revoke;
+- accept против resend;
+- accept против company archive;
+- accept против limit reduction;
+- два invitation с одним email;
+- два account с одним login;
+- deadlock retry с ограниченным числом попыток.
+
+15.4. Security-тесты
+
+- невалидные токены не раскрывают существование email/company;
+- timing difference не раскрывает статус token;
+- token не попадает в logs;
+- password не попадает в logs;
+- company_id и role из request отклоняются;
+- foreign invitation id не управляется чужим admin;
+- SQL injection payloads остаются bound parameters;
+- rate limit работает;
+- old client блокируется version gate;
+- password не сохраняется в QSettings.
+
+15.5. UI-тесты
+
+- кнопка принятия видна без входа;
+- токен не сохраняется;
+- company/email/profile preview не редактируют административные поля;
+- двойной click не создаёт два запроса;
+- error text не раскрывает token state;
+- после success секретные поля очищены;
+- форма работает при перезапуске;
+- после accept обычный login успешен.
+
+
+16. ПОЭТАПНЫЙ ПЛАН РЕАЛИЗАЦИИ
+
+Этап 0. Аудит схемы
+- проверить accounts/employees constraints;
+- найти дубли login/email/employee_id;
+- утвердить password policy;
+- утвердить политику редактирования ФИО при accept.
+
+Критерий: нет неизвестных дублей и несовместимых constraints.
+
+Этап 1. Миграция 013
+- добавить acceptance fields;
+- добавить FK/check/index;
+- добавить idempotency storage;
+- не выполнять backfill без отчёта;
+- проверить в rollback-транзакции.
+
+Критерий: миграция идемпотентна и migration_runner --check успешен.
+
+Этап 2. Сервис inspect/accept
+- реализовать inspect_invitation;
+- реализовать accept_invitation;
+- ввести generic errors;
+- ввести idempotency;
+- добавить audit;
+- покрыть unit/integration/concurrency-тестами.
+
+Критерий: один токен создаёт ровно одну учётную запись.
+
+Этап 3. UI
+- добавить кнопку в AuthWindow;
+- создать InvitationAcceptDialog;
+- показать preview;
+- добавить account form;
+- очищать секреты;
+- запретить double submit;
+- сохранить общий стиль приложения в отдельном QSS.
+
+Критерий: invited employee проходит весь flow без помощи admin.
+
+Этап 4. Revoke/resend
+- добавить действия для pending-строк;
+- новый токен при resend;
+- отозвать старый;
+- обновлять usage counters;
+- добавить audit.
+
+Критерий: resend не удваивает резерв.
+
+Этап 5. Безопасная авторизация
+- удалить password из QSettings;
+- ввести server session;
+- добавить refresh token rotation;
+- добавить session_generation;
+- добавить version gate;
+- закрыть прямые DB grants.
+
+Критерий: модифицированный клиент не может подменить principal/company/role.
+
+Этап 6. Email delivery
+- email templates;
+- signed HTTPS link;
+- delivery provider abstraction;
+- bounce/complaint handling;
+- resend throttling;
+- domain authentication SPF/DKIM/DMARC;
+- статус доставки в реестре.
+
+
+17. РАЗВЁРТЫВАНИЕ И ОТКАТ
+
+Pre-deploy:
+- backup;
+- restore drill;
+- schema audit;
+- duplicate report;
+- migration_runner --check;
+- unit/integration/concurrency/security tests;
+- проверка, что old client не обходит новые правила;
+- проверка отсутствия password/token в logs.
+
+Deploy:
+- применить migration 013;
+- выкатить service с feature flag invitation_acceptance=false;
+- провести smoke tests;
+- включить флаг для тестовой компании;
+- постепенно расширить;
+- наблюдать errors/rate limits/accept latency.
+
+Rollback:
+- выключить feature flag;
+- не удалять accepted employees/accounts;
+- additive columns оставить до окончания rollback window;
+- для committed acceptance использовать forward-fix;
+- не возвращать accepted invitation в pending без аудируемой ручной процедуры.
+
+
+18. МОНИТОРИНГ
+
+Метрики:
+- invitations_created_total;
+- invitations_accepted_total;
+- invitations_expired_total;
+- invitations_revoked_total;
+- invitations_resent_total;
+- invitation_accept_failed_total по общей категории;
+- invitation_accept_latency;
+- invitation_lock_wait;
+- invitation_deadlock_retry;
+- invitation_rate_limited_total;
+- company_seat_usage;
+- pending_invitation_age.
+
+Алерты:
+- резкий рост invalid tokens;
+- рост duplicate/login conflicts;
+- deadlocks;
+- превышение лимита;
+- много pending invitations с большим возрастом;
+- email delivery failures;
+- попытки cross-tenant operations;
+- попадание secret-like values в logs по DLP-правилам.
+
+
+19. ДАЛЬНЕЙШЕЕ РАЗВИТИЕ
+
+19.1. Email и deep links
+- автоматическая доставка;
+- branded templates компании;
+- custom desktop protocol;
+- web fallback;
+- QR-code для очной выдачи;
+- доменная верификация.
+
+19.2. MFA и passwordless
+- TOTP/WebAuthn при первом входе;
+- magic-link вместо пароля;
+- passkeys;
+- recovery codes;
+- обязательная MFA для company_owner/company_admin.
+
+19.3. SSO/SCIM
+- SAML/OIDC;
+- приглашение как pre-provisioning;
+- automatic domain join только для verified domains;
+- SCIM provisioning/deprovisioning;
+- role mapping;
+- group mapping.
+
+19.4. Множественное членство
+
+Текущая модель employee.company_id допускает одну компанию.
+Для множественного членства в будущем:
+- вынести membership в отдельную таблицу;
+- роль хранить в membership;
+- invitation создаёт membership, а не новый account;
+- добавить company switcher;
+- разделить identity и employee profile.
+
+19.5. Billing
+- pending invitation резервирует paid seat;
+- webhook может изменить employee_limit;
+- grace period при снижении тарифа;
+- не отзывать приглашения без явной billing policy;
+- показывать reserved seats в billing preview.
+
+
+20. КРИТЕРИИ ПРИЁМКИ
+
+Функция считается готовой, когда:
+
+1. Приглашённый сотрудник может принять код без помощи admin.
+2. company_id берётся только из invitation.
+3. Роль берётся только из requested_role.
+4. Один токен создаёт не более одного employee и account.
+5. employee/account/invitation/history/audit изменяются атомарно.
+6. Pending seat превращается в active seat без двойного учёта.
+7. Revoked, expired, accepted и foreign invitation не создают account.
+8. Параллельные accept requests не создают дубли.
+9. Секреты не попадают в БД, audit, logs и QSettings.
+10. Пароль задаёт сам сотрудник.
+11. company_admin не может назначить company_admin через invitation.
+12. Компания blocked/archived не принимает новых участников.
+13. Тесты unit/integration/concurrency/security/UI проходят.
+14. migration_runner подтверждает целостность истории.
+15. Существует проверенный rollback/forward-fix plan.
+
+
+21. ЯВНЫЕ ОГРАНИЧЕНИЯ MVP
+
+В MVP не входит:
+- вход в несколько компаний одной identity;
+- SSO/SCIM;
+- платное изменение лимита;
+- полноценная email-платформа, если выбран manual code delivery;
+- automatic domain join;
+- массовый CSV import;
+- перенос сотрудника между компаниями;
+- назначение company_owner через invitation.
+
+При этом MVP обязан иметь:
+- одноразовый токен;
+- атомарное accept;
+- лимит и concurrency protection;
+- generic errors;
+- audit;
+- отзыв и resend;
+- безопасное хранение password;
+- отсутствие password/token в QSettings и logs.
+
+
+22. ПЛАНИРУЕМЫЕ ФАЙЛЫ И МОДУЛИ
+
+Минимально:
+- sticky_crm/migrations/013_invitation_acceptance.sql;
+- sticky_crm/invitation_service.py или расширение company_service.py;
+- sticky_crm/invitation_accept_dialog.py;
+- sticky_crm/styles/default/invitation_accept.qss;
+- изменение sticky_crm/auth_window.py;
+- изменение sticky_crm/register_window.py или его разделение на personal registration и invitation acceptance;
+- изменение sticky_crm/employees_widget.py для revoke/resend;
+- tests/test_invitation_acceptance.py;
+- tests/test_invitation_acceptance_ui.py;
+- tests/test_invitation_acceptance_concurrency.py;
+- tests/test_auth_secret_storage.py;
+- tests/test_invitation_acceptance_migration.py.
+
+
+23. ИТОГОВОЕ АРХИТЕКТУРНОЕ РЕШЕНИЕ
+
+Для ближайшего этапа:
+- создать migration 013;
+- реализовать inspect_invitation и accept_invitation;
+- создать InvitationAcceptDialog;
+- добавить revoke/resend;
+- удалить сохранение password в QSettings;
+- покрыть concurrency/security тестами;
+- не применять миграцию к production без backup, staging rollback test и аудита дублей.
+
+Для production-цели:
+- вынести authentication и invitation acceptance за server API boundary;
+- закрыть прямые DB grants;
+- включить trusted sessions, TLS, rate limiting, version gate и централизованный security audit.

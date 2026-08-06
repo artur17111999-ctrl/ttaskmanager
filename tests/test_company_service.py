@@ -142,6 +142,8 @@ def _invitation_data(**overrides):
         "last_name": "Employee",
         "first_name": "Test",
         "requested_role": "employee",
+        "position_id": 4,
+        "department_id": 5,
     }
     data.update(overrides)
     return data
@@ -269,6 +271,10 @@ class InvitationLimitAndIsolationTests(unittest.TestCase):
         def responder(sql, params):
             if _is_actor_query(sql, params):
                 return _actor_row(role="company_admin")
+            if "select 1 from positions" in sql:
+                return (1,)
+            if "select 1 from departments" in sql:
+                return (1,)
             if "from companies" in sql and "for update" in sql:
                 return (company[10], company[8])
             if "count(" in sql and "from employees" in sql:
@@ -407,13 +413,64 @@ class InvitationLimitAndIsolationTests(unittest.TestCase):
         self.assertEqual(usage["reserved_count"], 2)
         self.assertEqual(usage["free_count"], 10)
 
+    def test_pending_employee_list_exposes_inviter_for_ui_authorization(self):
+        created_at = datetime(2026, 8, 5, 12, 0, 0)
+        expires_at = datetime(2026, 8, 12, 12, 0, 0)
+
+        def responder(sql, params):
+            if _is_actor_query(sql, params):
+                return _actor_row(role="company_admin")
+            if "from company_invitations invitation" in sql:
+                return _Result(
+                    many=[
+                        (
+                            501,
+                            "new@example.test",
+                            "employee",
+                            {
+                                "last_name": "Employee",
+                                "first_name": "Test",
+                                "position_id": 4,
+                                "department_id": 5,
+                            },
+                            expires_at,
+                            created_at,
+                            101,
+                            "Инженер",
+                            "ИТ",
+                        )
+                    ]
+                )
+            return _Result(many=[])
+
+        connection = _Connection(responder)
+        with patch.object(company_service, "get_connection", return_value=connection):
+            rows = company_service.list_company_employees(
+                101, {"status": "pending"}
+            )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["invitation_id"], 501)
+        self.assertEqual(rows[0]["invited_by"], 101)
+        invitation_sql = next(
+            sql
+            for sql, _ in connection.executed
+            if "from company_invitations invitation" in sql.casefold()
+        )
+        self.assertIn("invitation.invited_by", invitation_sql.casefold())
+
     def test_invitation_profile_is_normalized_and_persisted(self):
         result, connection = self._create_invitation(
             self._invitation_responder(active_count=1, reserved_count=0)
         )
         self.assertEqual(
             result["profile_data"],
-            {"last_name": "Employee", "first_name": "Test"},
+            {
+                "last_name": "Employee",
+                "first_name": "Test",
+                "position_id": 4,
+                "department_id": 5,
+            },
         )
         insert_sql, insert_params = next(
             (" ".join(sql.split()).casefold(), params)
@@ -437,6 +494,43 @@ class InvitationLimitAndIsolationTests(unittest.TestCase):
             company_service.create_invitation(
                 101, _invitation_data(first_name="   ")
             )
+
+    def test_invitation_requires_position_and_department_before_database_access(self):
+        for field in ("position_id", "department_id"):
+            with self.subTest(field=field):
+                data = _invitation_data()
+                data.pop(field)
+                with patch.object(company_service, "get_connection") as get_connection:
+                    with self.assertRaises(company_service.ValidationError):
+                        company_service.create_invitation(101, data)
+                get_connection.assert_not_called()
+
+    def test_unknown_catalog_reference_does_not_reserve_a_seat(self):
+        base = self._invitation_responder(active_count=1, reserved_count=0)
+
+        def responder(sql, params):
+            if "select 1 from positions" in sql:
+                return None
+            return base(sql, params)
+
+        connection = _Connection(responder)
+        with patch.object(company_service, "get_connection", return_value=connection):
+            with self.assertRaises(company_service.ValidationError):
+                company_service.create_invitation(101, _invitation_data())
+
+        self.assertFalse(
+            any(
+                "insert into company_invitations" in sql.casefold()
+                for sql, _ in connection.executed
+            )
+        )
+        self.assertFalse(
+            any(
+                "from companies" in sql.casefold() and "for update" in sql.casefold()
+                for sql, _ in connection.executed
+            ),
+            "Invalid catalog data must fail before locking or reserving a seat",
+        )
 
     def test_email_conflict_message_does_not_reveal_account_or_invitation(self):
         messages = []

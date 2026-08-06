@@ -696,6 +696,10 @@ def create_invitation(
     if not 1 <= expires_in_days <= MAX_INVITATION_DAYS:
         raise ValidationError(f"Invitation lifetime must be 1-{MAX_INVITATION_DAYS} days")
     profile_data = _normalize_invitation_profile(employee_data)
+    if profile_data.get("position_id") is None:
+        raise ValidationError("position_id is required for a new employee")
+    if profile_data.get("department_id") is None:
+        raise ValidationError("department_id is required for a new employee")
 
     delivery_token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(delivery_token.encode("utf-8")).hexdigest()
@@ -707,6 +711,19 @@ def create_invitation(
         _require_role(actor_state, ROLE_OWNER, ROLE_ADMIN)
         if requested_role == ROLE_ADMIN and actor_state["role"] != ROLE_OWNER:
             raise PermissionDenied("Only the company owner can invite an administrator")
+
+        cursor.execute(
+            "SELECT 1 FROM positions WHERE id = %s",
+            (profile_data["position_id"],),
+        )
+        if not cursor.fetchone():
+            raise ValidationError("The selected position does not exist")
+        cursor.execute(
+            "SELECT 1 FROM departments WHERE id = %s",
+            (profile_data["department_id"],),
+        )
+        if not cursor.fetchone():
+            raise ValidationError("The selected department does not exist")
 
         usage = _lock_company_and_usage(cursor, company_id, revoke_expired=True)
         if usage["used_count"] >= usage["employee_limit"]:
@@ -888,6 +905,7 @@ def list_company_employees(
                    invitation.profile_data,
                    invitation.expires_at,
                    invitation.created_at,
+                   invitation.invited_by,
                    position.title,
                    department.title
             FROM company_invitations invitation
@@ -913,6 +931,7 @@ def list_company_employees(
             "profile_data",
             "expires_at",
             "created_at",
+            "invited_by",
             "position",
             "department",
         )
@@ -933,6 +952,7 @@ def list_company_employees(
                     "id": None,
                     "employee_id": None,
                     "invitation_id": invitation.get("invitation_id"),
+                    "invited_by": invitation.get("invited_by"),
                     "full_name": full_name,
                     "position": invitation.get("position"),
                     "department": invitation.get("department"),

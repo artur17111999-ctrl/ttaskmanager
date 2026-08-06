@@ -32,6 +32,7 @@ from company_service import (
     restore_employee,
 )
 from db import get_company_employees, get_departments, get_positions
+from invitation_service import revoke_invitation, resend_invitation
 
 
 ROLE_TITLES = {
@@ -118,6 +119,12 @@ class EmployeeInvitationDialog(QDialog):
             return
         if "@" not in self.email.text() or "." not in self.email.text().split("@")[-1]:
             QMessageBox.warning(self, "Проверьте данные", "Укажите корректный email.")
+            return
+        if self.position.currentData() is None:
+            QMessageBox.warning(self, "Проверьте данные", "Выберите должность сотрудника.")
+            return
+        if self.department.currentData() is None:
+            QMessageBox.warning(self, "Проверьте данные", "Выберите подразделение сотрудника.")
             return
         self.accept()
 
@@ -300,7 +307,7 @@ class EmployeesWidget(QWidget):
                 if column == 5:
                     item.setTextAlignment(Qt.AlignCenter)
                 self.table.setItem(row_index, column, item)
-            if can_manage and employee_id is not None:
+            if can_manage and (employee_id is not None or employee.get("invitation_id")):
                 self.table.setCellWidget(
                     row_index,
                     6,
@@ -356,14 +363,35 @@ class EmployeesWidget(QWidget):
         menu = QMenu(button)
 
         employee_id = employee.get("id") or employee.get("employee_id")
+        invitation_id = employee.get("invitation_id")
         role = employee.get("role") or "employee"
+        is_pending = bool(invitation_id) and employee_id is None
         is_dismissed = employee.get("is_dismissed") or str(
             employee.get("status") or ""
         ).casefold() in {"dismissed", "blocked"}
         is_owner = role == "company_owner"
-        is_self = int(employee_id) == int(self.actor.employee_id)
+        is_self = employee_id is not None and int(employee_id) == int(self.actor.employee_id)
 
-        if not is_owner and self.actor.role == "company_owner":
+        if is_pending:
+            invited_by = employee.get("invited_by")
+            can_manage_invitation = (
+                self.actor.role == "company_owner"
+                or (
+                    invited_by is not None
+                    and int(invited_by) == int(self.actor.employee_id)
+                )
+            )
+            if can_manage_invitation:
+                resend_action = menu.addAction("Создать новый код")
+                resend_action.triggered.connect(
+                    lambda checked=False, iid=invitation_id: self._resend_invitation(iid)
+                )
+                revoke_action = menu.addAction("Отозвать приглашение")
+                revoke_action.triggered.connect(
+                    lambda checked=False, iid=invitation_id: self._revoke_invitation(iid)
+                )
+
+        if not is_pending and not is_owner and self.actor.role == "company_owner":
             target_role = "employee" if role == "company_admin" else "company_admin"
             role_action = menu.addAction(
                 "Снять роль администратора"
@@ -374,7 +402,7 @@ class EmployeesWidget(QWidget):
                 lambda checked=False, eid=employee_id, value=target_role: self._set_role(eid, value)
             )
 
-        if not is_owner and not is_self:
+        if not is_pending and not is_owner and not is_self:
             if is_dismissed and self.actor.role == "company_owner":
                 state_action = menu.addAction("Восстановить")
                 state_action.triggered.connect(
@@ -391,6 +419,60 @@ class EmployeesWidget(QWidget):
             no_actions.setEnabled(False)
         button.setMenu(menu)
         return button
+
+    def _revoke_invitation(self, invitation_id):
+        answer = QMessageBox.question(
+            self,
+            "Отозвать приглашение",
+            "Код перестанет действовать, а зарезервированное место освободится.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            revoke_invitation(self.actor, invitation_id)
+        except CompanyServiceError as error:
+            QMessageBox.warning(self, "Приглашение не отозвано", str(error))
+            return
+        except Exception:
+            QMessageBox.critical(
+                self,
+                "Приглашение не отозвано",
+                "Сервис приглашений временно недоступен.",
+            )
+            return
+        self.reload()
+
+    def _resend_invitation(self, invitation_id):
+        answer = QMessageBox.question(
+            self,
+            "Создать новый код",
+            "Текущий код будет немедленно отозван. Продолжить?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            invitation = resend_invitation(self.actor, invitation_id)
+        except CompanyServiceError as error:
+            QMessageBox.warning(self, "Новый код не создан", str(error))
+            return
+        except Exception:
+            QMessageBox.critical(
+                self,
+                "Новый код не создан",
+                "Сервис приглашений временно недоступен.",
+            )
+            return
+
+        token = dict(invitation or {}).get("delivery_token")
+        message = "Новый код создан. Предыдущий код больше не действует."
+        if token:
+            message += f"\n\nОдноразовый код:\n{token}\n\nПосле закрытия он больше не отображается."
+        QMessageBox.information(self, "Новый код приглашения", message)
+        self.reload()
 
     def _set_role(self, employee_id, role):
         try:

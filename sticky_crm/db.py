@@ -491,6 +491,7 @@ def check_user(login, password):
     cursor = None
     try:
         cursor = conn.cursor()
+        account_columns = _get_table_columns(cursor, 'accounts')
         employee_columns = _get_table_columns(cursor, 'employees')
         company_columns = _get_table_columns(cursor, 'companies')
 
@@ -518,6 +519,10 @@ def check_user(login, password):
             "company.status::text" if has_companies and 'status' in company_columns
             else "NULL::VARCHAR"
         )
+        account_status_expr = (
+            "COALESCE(a.status::text, 'active')" if 'status' in account_columns
+            else "'active'::VARCHAR"
+        )
 
         cursor.execute(f"""
             SELECT a.id,
@@ -533,11 +538,12 @@ def check_user(login, password):
                    {company_name_expr} AS company_name,
                    {role_expr} AS role,
                    {employee_status_expr} AS employee_status,
-                   {company_status_expr} AS company_status
+                   {company_status_expr} AS company_status,
+                   {account_status_expr} AS account_status
             FROM accounts a
             JOIN employees e ON a.employee_id = e.id
             {company_join}
-            WHERE a.login = %s
+            WHERE LOWER(BTRIM(a.login)) = LOWER(BTRIM(%s))
         """, (login,))
 
         result = cursor.fetchone()
@@ -548,7 +554,7 @@ def check_user(login, password):
         (account_id, password_hash, is_locked, emp_id,
          last_name, first_name, middle_name, email, is_dismissed,
          company_id, company_name, role, employee_status,
-         company_status) = result
+         company_status, account_status) = result
 
         # Проверяем пароль через bcrypt
         if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
@@ -556,6 +562,9 @@ def check_user(login, password):
 
         if is_locked:
             return False, "Учетная запись заблокирована"
+
+        if str(account_status or 'active').casefold() != 'active':
+            return False, "Учетная запись не активна"
 
         if is_dismissed or _access_status_is_blocked(employee_status):
             return False, "Сотрудник не имеет доступа к системе"

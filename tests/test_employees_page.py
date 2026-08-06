@@ -13,12 +13,12 @@ if str(APP_ROOT) not in sys.path:
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog
 
 import db
 import employees_widget
 from company_widget import can_open_company_page
-from employees_widget import EmployeesWidget
+from employees_widget import EmployeeInvitationDialog, EmployeesWidget
 
 
 class _EmployeeCursorStub:
@@ -236,6 +236,137 @@ class EmployeesWidgetTests(unittest.TestCase):
             actions_button = widget.table.cellWidget(0, 6)
             self.assertIsNotNone(actions_button)
             self.assertEqual(len(actions_button.menu().actions()), 1)
+        finally:
+            widget.close()
+            widget.deleteLater()
+
+    def test_invitation_dialog_rejects_missing_required_catalog_selection(self):
+        scenarios = (
+            ([(4, "Инженер")], [], "подразделение"),
+            ([], [(5, "ИТ")], "должность"),
+        )
+        for positions, departments, expected_message in scenarios:
+            with self.subTest(expected_message=expected_message), patch.object(
+                employees_widget, "get_positions", return_value=positions
+            ), patch.object(
+                employees_widget, "get_departments", return_value=departments
+            ), patch.object(employees_widget.QMessageBox, "warning") as warning:
+                dialog = EmployeeInvitationDialog()
+                try:
+                    dialog.last_name.setText("Иванов")
+                    dialog.first_name.setText("Иван")
+                    dialog.email.setText("ivan@example.test")
+                    dialog._validate()
+
+                    self.assertEqual(dialog.result(), QDialog.Rejected)
+                    self.assertIn(expected_message, warning.call_args.args[2].casefold())
+                finally:
+                    dialog.close()
+                    dialog.deleteLater()
+
+    def test_pending_invitation_actions_use_actor_aware_revoke_and_resend(self):
+        pending = {
+            "id": None,
+            "invitation_id": 51,
+            "full_name": "Иванов Иван",
+            "email": "ivan@example.test",
+            "role": "employee",
+            "status": "pending",
+            "is_dismissed": False,
+        }
+        actor = {
+            "account_id": 1,
+            "employee_id": 42,
+            "full_name": "Company Owner",
+            "company_id": 5,
+            "company_name": "Acme",
+            "role": "company_owner",
+        }
+        with patch.object(
+            employees_widget, "list_company_employees", return_value=[pending]
+        ):
+            widget = EmployeesWidget(42, actor_context=actor)
+
+        try:
+            actions_button = widget.table.cellWidget(0, 6)
+            self.assertIsNotNone(actions_button)
+            self.assertEqual(
+                [action.text() for action in actions_button.menu().actions()],
+                ["Создать новый код", "Отозвать приглашение"],
+            )
+
+            with patch.object(
+                employees_widget.QMessageBox,
+                "question",
+                return_value=employees_widget.QMessageBox.Yes,
+            ), patch.object(
+                employees_widget, "revoke_invitation"
+            ) as revoke, patch.object(widget, "reload") as reload:
+                widget._revoke_invitation(51)
+
+            revoke.assert_called_once_with(widget.actor, 51)
+            reload.assert_called_once_with()
+
+            with patch.object(
+                employees_widget.QMessageBox,
+                "question",
+                return_value=employees_widget.QMessageBox.Yes,
+            ), patch.object(
+                employees_widget,
+                "resend_invitation",
+                return_value={"id": 52, "delivery_token": "one-time-code"},
+            ) as resend, patch.object(
+                employees_widget.QMessageBox, "information"
+            ) as information, patch.object(widget, "reload") as reload:
+                widget._resend_invitation(51)
+
+            resend.assert_called_once_with(widget.actor, 51)
+            self.assertIn("one-time-code", information.call_args.args[2])
+            reload.assert_called_once_with()
+        finally:
+            widget.close()
+            widget.deleteLater()
+
+    def test_delegated_admin_sees_pending_actions_only_for_own_invitation(self):
+        pending_rows = [
+            {
+                "id": None,
+                "invitation_id": invitation_id,
+                "invited_by": invited_by,
+                "full_name": f"Pending {invitation_id}",
+                "email": f"pending{invitation_id}@example.test",
+                "role": "employee",
+                "status": "pending",
+                "is_dismissed": False,
+            }
+            for invitation_id, invited_by in ((51, 42), (52, 99), (53, None))
+        ]
+        actor = {
+            "account_id": 1,
+            "employee_id": 42,
+            "full_name": "Delegated Admin",
+            "company_id": 5,
+            "company_name": "Acme",
+            "role": "company_admin",
+        }
+        with patch.object(
+            employees_widget, "list_company_employees", return_value=pending_rows
+        ):
+            widget = EmployeesWidget(42, actor_context=actor)
+
+        try:
+            own_actions = widget.table.cellWidget(0, 6).menu().actions()
+            foreign_actions = widget.table.cellWidget(1, 6).menu().actions()
+            missing_inviter_actions = widget.table.cellWidget(2, 6).menu().actions()
+
+            self.assertEqual(
+                [action.text() for action in own_actions],
+                ["Создать новый код", "Отозвать приглашение"],
+            )
+            for actions in (foreign_actions, missing_inviter_actions):
+                self.assertEqual(len(actions), 1)
+                self.assertEqual(actions[0].text(), "Нет доступных действий")
+                self.assertFalse(actions[0].isEnabled())
         finally:
             widget.close()
             widget.deleteLater()
