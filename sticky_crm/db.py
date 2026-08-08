@@ -5,8 +5,12 @@
 import psycopg2
 from psycopg2 import Binary
 from datetime import datetime
-from config import DB_CONFIG
-from access_context import AccessContext
+try:
+    from .config import DB_CONFIG
+    from .access_context import AccessContext
+except ImportError:  # Support direct execution from the sticky_crm directory.
+    from config import DB_CONFIG
+    from access_context import AccessContext
 
 
 _BLOCKED_ACCESS_STATUSES = {
@@ -806,6 +810,29 @@ def get_company_employees(actor_user_id, search_query=None):
             cursor.close()
         conn.close()
 
+def _employee_company_id(cursor, employee_id):
+    cursor.execute(
+        """
+        SELECT company_id
+        FROM employees
+        WHERE id = %s
+          AND COALESCE(is_dismissed, FALSE) = FALSE
+        """,
+        (employee_id,),
+    )
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def _same_company_members(cursor, company_id, member_ids):
+    if company_id is None:
+        return False
+    return all(
+        _employee_company_id(cursor, employee_id) == company_id
+        for employee_id in set(member_ids)
+    )
+
+
 def create_group_chat(name, creator_id, member_ids):
     """
     Создать групповой чат.
@@ -817,9 +844,17 @@ def create_group_chat(name, creator_id, member_ids):
         return None
     try:
         cursor = conn.cursor()
+        company_id = _employee_company_id(cursor, creator_id)
+        member_ids = list(dict.fromkeys(member_ids))
+        if not _same_company_members(cursor, company_id, member_ids):
+            return None
         cursor.execute(
-            "INSERT INTO chats (name, is_group, created_by) VALUES (%s, TRUE, %s) RETURNING id",
-            (name, creator_id)
+            """
+            INSERT INTO chats (name, is_group, created_by, company_id)
+            VALUES (%s, TRUE, %s, %s)
+            RETURNING id
+            """,
+            (name, creator_id, company_id),
         )
         chat_id = cursor.fetchone()[0]
         # Добавляем участников
@@ -849,6 +884,10 @@ def get_or_create_personal_chat(user_id, contact_id):
         return None
     try:
         cursor = conn.cursor()
+        user_company_id = _employee_company_id(cursor, user_id)
+        contact_company_id = _employee_company_id(cursor, contact_id)
+        if user_company_id is None or user_company_id != contact_company_id:
+            return None
         # Ищем личный чат, где оба участника
         cursor.execute("""
             SELECT cm1.chat_id
@@ -857,14 +896,16 @@ def get_or_create_personal_chat(user_id, contact_id):
             JOIN chats c ON cm1.chat_id = c.id
             WHERE cm1.employee_id = %s AND cm2.employee_id = %s
               AND c.is_group = FALSE
+              AND c.company_id = %s
             LIMIT 1
-        """, (user_id, contact_id))
+        """, (user_id, contact_id, user_company_id))
         row = cursor.fetchone()
         if row:
             return row[0]
         # Создаём новый личный чат
         cursor.execute(
-            "INSERT INTO chats (is_group) VALUES (FALSE) RETURNING id"
+            "INSERT INTO chats (is_group, company_id) VALUES (FALSE, %s) RETURNING id",
+            (user_company_id,)
         )
         chat_id = cursor.fetchone()[0]
         cursor.execute(
@@ -894,6 +935,16 @@ def get_user_chats(user_id):
     try:
         cursor = conn.cursor()
         cursor.execute("""
+            SELECT employee.company_id
+            FROM employees employee
+            WHERE employee.id = %s
+              AND COALESCE(employee.is_dismissed, FALSE) = FALSE
+        """, (user_id,))
+        company_row = cursor.fetchone()
+        if not company_row or company_row[0] is None:
+            return []
+        company_id = company_row[0]
+        cursor.execute("""
             SELECT 
                 c.id,
                 c.name,
@@ -905,8 +956,9 @@ def get_user_chats(user_id):
             FROM chats c
             JOIN chat_members cm ON c.id = cm.chat_id
             WHERE cm.employee_id = %s
+              AND c.company_id = %s
             ORDER BY last_time DESC NULLS LAST
-        """, (user_id,))
+        """, (user_id, company_id))
         chats = []
         for row in cursor.fetchall():
             chats.append({
@@ -1062,18 +1114,32 @@ def get_or_create_self_chat(user_id):
         return None
     try:
         cursor = conn.cursor()
+        company_id = _employee_company_id(cursor, user_id)
+        if company_id is None:
+            return None
         # Ищем существующий чат с is_self = TRUE, где участник только этот пользователь
         cursor.execute("""
-            SELECT c.id FROM chats c
+            SELECT c.id, c.company_id FROM chats c
             JOIN chat_members cm ON c.id = cm.chat_id
             WHERE c.is_self = TRUE AND cm.employee_id = %s
             LIMIT 1
         """, (user_id,))
         row = cursor.fetchone()
         if row:
+            if row[1] is None:
+                cursor.execute(
+                    "UPDATE chats SET company_id = %s WHERE id = %s AND company_id IS NULL",
+                    (company_id, row[0]),
+                )
+                conn.commit()
+            elif row[1] != company_id:
+                return None
             return row[0]
         # Создаём
-        cursor.execute("INSERT INTO chats (is_self) VALUES (TRUE) RETURNING id")
+        cursor.execute(
+            "INSERT INTO chats (is_self, company_id) VALUES (TRUE, %s) RETURNING id",
+            (company_id,),
+        )
         chat_id = cursor.fetchone()[0]
         cursor.execute("INSERT INTO chat_members (chat_id, employee_id) VALUES (%s, %s)", (chat_id, user_id))
         conn.commit()
@@ -1105,6 +1171,9 @@ def get_contacts_and_groups(user_id, search_query=None):
         results = []
 
         # Чат "Избранное" (с самим собой)
+        company_id = _employee_company_id(cursor, user_id)
+        if company_id is None:
+            return []
         self_chat_id = get_or_create_self_chat(user_id)
         if self_chat_id:
             results.append({'type': 'self', 'id': None, 'name': 'Избранное', 'chat_id': self_chat_id})
@@ -1115,7 +1184,8 @@ def get_contacts_and_groups(user_id, search_query=None):
             FROM employees
             WHERE is_dismissed = FALSE AND id != %s
         """
-        params = [user_id]
+        params = [user_id, company_id]
+        emp_query += " AND company_id = %s"
         if search_query:
             emp_query += """ AND (
                 LOWER(last_name) LIKE LOWER(%s) OR
@@ -1140,7 +1210,8 @@ def get_contacts_and_groups(user_id, search_query=None):
             JOIN chat_members cm ON c.id = cm.chat_id
             WHERE c.is_group = TRUE AND cm.employee_id = %s
         """
-        gparams = [user_id]
+        gparams = [user_id, company_id]
+        group_query += " AND c.company_id = %s"
         if search_query:
             group_query += " AND LOWER(c.name) LIKE LOWER(%s)"
             gparams.append(f"%{search_query}%")
@@ -1170,10 +1241,14 @@ def create_group_chat_auto(user_id, member_ids):
         return None, None
     try:
         cursor = conn.cursor()
+        company_id = _employee_company_id(cursor, user_id)
+        member_ids = list(dict.fromkeys(member_ids))
+        if not _same_company_members(cursor, company_id, member_ids):
+            return None, None
         # Создаём чат
         cursor.execute(
-            "INSERT INTO chats (is_group, created_by) VALUES (TRUE, %s) RETURNING id",
-            (user_id,)
+            "INSERT INTO chats (is_group, created_by, company_id) VALUES (TRUE, %s, %s) RETURNING id",
+            (user_id, company_id)
         )
         chat_id = cursor.fetchone()[0]
         # Автоназвание

@@ -1,0 +1,1481 @@
+ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+Развитие переписок, уведомлений и общей платформы безопасности Sticky CRM
+
+Версия: 1.0
+Дата: 06.08.2026
+Статус: проектирование перед реализацией
+
+
+1. НАЗНАЧЕНИЕ ДОКУМЕНТА
+
+Документ определяет требования к развитию:
+- личных, групповых и служебных переписок;
+- единого центра уведомлений;
+- доставки событий в реальном времени;
+- хранения сообщений и вложений;
+- разграничения доступа между компаниями;
+- аудита, мониторинга и защиты данных;
+- дальнейшего развития web, mobile, SSO, DLP и multi-company модели.
+
+Документ является основанием для декомпозиции работ, проектирования миграций,
+API, пользовательского интерфейса и набора тестов.
+
+
+2. ЦЕЛИ
+
+2.1. Функциональные цели
+
+- Сделать переписки надёжным рабочим инструментом внутри компании.
+- Обеспечить личные, групповые, проектные и служебные чаты.
+- Добавить точные статусы отправки, доставки и прочтения.
+- Добавить ответы, упоминания, реакции, закрепление и безопасные вложения.
+- Объединить уведомления о сообщениях, задачах, комментариях, стиках,
+  приглашениях, сотрудниках и событиях безопасности.
+- Поддержать повторную доставку, работу после временной потери сети и
+  восстановление состояния после перезапуска клиента.
+
+2.2. Цели безопасности
+
+- Исключить доступ сотрудника к чатам, сообщениям и уведомлениям другой компании.
+- Не доверять company_id, sender_id, user_id, role и membership, переданным клиентом.
+- Вынести операции переписки и уведомлений за доверенную серверную границу.
+- Немедленно прекращать доступ после увольнения, блокировки или отзыва сессии.
+- Не допускать попадания текста сообщений, файлов и токенов в технические логи.
+- Сделать удаление, экспорт и административный просмотр аудируемыми.
+- Подготовить архитектуру к росту числа компаний, сотрудников и каналов доставки.
+
+
+3. ТЕКУЩЕЕ СОСТОЯНИЕ
+
+3.1. Уже реализовано
+
+- личные чаты;
+- чат с самим собой;
+- групповые чаты;
+- список контактов и групп;
+- отправка текстовых сообщений;
+- изображения и скриншоты;
+- редактирование и полное удаление сообщения;
+- пересылка сообщений;
+- поиск по тексту и дате;
+- черновики;
+- закрепление чатов;
+- индикатор набора текста;
+- простой статус прочтения;
+- создание стика из сообщения;
+- простые in-app уведомления;
+- открытие чата из уведомления;
+- polling новых сообщений и уведомлений.
+
+3.2. Обнаруженные ограничения
+
+- Desktop-клиент напрямую подключается к PostgreSQL и не является доверенной
+  security boundary.
+- Многие функции принимают chat_id, user_id и sender_id от клиента.
+- Не во всех операциях выполняется обязательная проверка членства в чате и
+  принадлежности чата компании пользователя.
+- Поле messages.is_read является общим для сообщения и некорректно моделирует
+  прочтение в групповом чате.
+- send_message фиксирует сообщение отдельным commit до завершения создания
+  уведомлений. Возможна доставка сообщения без уведомления.
+- create_notification открывает отдельное соединение на каждого получателя.
+- Уведомления обновляются polling-таймером и не имеют гарантии доставки.
+- Удаление сообщения и группового чата выполняется физически без retention window.
+- История редактирования не хранится.
+- Изображения хранятся в BYTEA PostgreSQL, а таблица может создаваться во время
+  выполнения приложения.
+- Поиск загружает до 500 записей и не имеет специализированного поискового индекса.
+- Нет idempotency key, поэтому повтор клиента может создать дубль сообщения.
+- Нет серверного version gate, rate limiting, управления устройствами и сессиями.
+- Нет единой типизированной модели уведомлений для задач, сообщений и безопасности.
+
+
+4. ОБЛАСТЬ РЕАЛИЗАЦИИ
+
+4.1. В MVP входят
+
+- серверный messaging API;
+- серверный notification API;
+- tenant и membership authorization;
+- личные и групповые чаты;
+- надёжная отправка сообщений;
+- курсорная пагинация;
+- статусы доставки и прочтения;
+- ответы на сообщения;
+- редактирование и мягкое удаление;
+- упоминания;
+- реакции;
+- закреплённые сообщения;
+- безопасные вложения;
+- поиск;
+- единый центр уведомлений;
+- настройки уведомлений;
+- tray-уведомления с защитой приватности;
+- аудит и мониторинг;
+- миграции и обратная совместимость на период rollout.
+
+4.2. Не входят в первый MVP
+
+- внешние пользователи и гостевые ссылки;
+- публичные каналы между компаниями;
+- сквозное шифрование E2EE;
+- голосовые и видеозвонки;
+- полноценная мобильная push-инфраструктура;
+- автоматическая модерация содержимого на основе ML;
+- SAML, OIDC и SCIM;
+- legal hold, если он не требуется до первого production rollout.
+
+
+5. РОЛИ И ПРАВА
+
+5.1. employee
+
+- видит чаты, в которых является активным участником;
+- создаёт личный чат только с сотрудником своей компании;
+- отправляет, редактирует и удаляет собственные сообщения в пределах политики;
+- управляет собственными черновиками, реакциями, избранным и настройками;
+- не может добавлять участников в административные или закрытые группы.
+
+5.2. company_admin
+
+- имеет права employee;
+- создаёт управляемые групповые чаты компании;
+- управляет участниками групп при наличии chat.manage_members;
+- не получает автоматическое право читать все чаты компании;
+- не может читать личную переписку без отдельного аудируемого compliance-flow.
+
+5.3. company_owner
+
+- управляет политиками хранения и каналами уведомлений компании;
+- назначает разрешения администраторам;
+- не получает неограниченный скрытый доступ к личным сообщениям;
+- экспорт или compliance-доступ выполняется отдельной операцией с основанием,
+  подтверждением и аудитом.
+
+5.4. system_admin
+
+- не должен по умолчанию видеть содержимое сообщений;
+- выполняет support-действия только в явно выбранном company context;
+- все операции с содержимым требуют break-glass процедуры и аудита.
+
+5.5. Уволенный или заблокированный сотрудник
+
+- не может создавать сессии;
+- все активные сессии и WebSocket-подключения отзываются;
+- членство в чатах переводится в inactive;
+- новые уведомления не создаются;
+- исторические данные не удаляются автоматически без retention policy.
+
+
+6. ФУНКЦИОНАЛЬНЫЕ ТРЕБОВАНИЯ К ПЕРЕПИСКАМ
+
+6.1. Типы чатов
+
+- direct: два сотрудника одной компании;
+- self: личное избранное пользователя;
+- group: управляемая группа;
+- project: чат, связанный с задачей или проектом;
+- department: будущий канал подразделения;
+- system: служебные сообщения без возможности ответа.
+
+Каждый чат принадлежит ровно одной компании в текущей one-company модели.
+
+6.2. Создание личного чата
+
+- Оба участника определяются сервером.
+- Оба должны быть активными сотрудниками одной компании.
+- Для одной пары сотрудников создаётся не более одного активного direct-чата.
+- Повторный запрос возвращает существующий чат.
+- Клиент не передаёт company_id.
+- Операция поддерживает Idempotency-Key.
+
+6.3. Групповые чаты
+
+- Название обязательно, длина 1-150 символов.
+- Создатель становится owner или moderator группы.
+- Участники выбираются только из активных сотрудников той же компании.
+- Добавление, удаление и смена роли участника создают system event и audit event.
+- Удалённый участник теряет доступ немедленно.
+- Выход последнего owner запрещён до передачи роли или архивирования группы.
+- Удаление группы по умолчанию заменяется архивированием.
+
+6.4. Отправка сообщения
+
+Входные данные:
+- chat public_id;
+- client_message_id UUID;
+- body;
+- message_type;
+- reply_to_message_id при наличии;
+- attachment upload tokens;
+- Idempotency-Key.
+
+Сервер самостоятельно определяет:
+- account_id;
+- employee_id отправителя;
+- company_id;
+- membership;
+- server timestamp;
+- sequence_number в чате.
+
+Ограничения MVP:
+- текст до 20 000 символов;
+- до 10 вложений;
+- общий размер вложений до 100 МБ на сообщение;
+- рекомендуемый размер одного файла до 25 МБ;
+- пустой body допустим только при наличии вложения или системного типа.
+
+Результат:
+- message public_id;
+- sequence_number;
+- server created_at;
+- статус accepted.
+
+Повтор с тем же client_message_id и тем же содержимым возвращает исходный результат.
+Повтор с тем же client_message_id и другим содержимым возвращает idempotency conflict.
+
+6.5. Порядок сообщений и пагинация
+
+- Порядок задаётся sequence_number внутри чата, а не временем клиента.
+- Используется курсорная пагинация before_sequence/after_sequence.
+- Размер страницы по умолчанию 50, максимум 100.
+- OFFSET не используется на больших выборках.
+- После переподключения клиент запрашивает события после last_seen_sequence.
+
+6.6. Статусы сообщения
+
+Клиентские состояния:
+- local_pending;
+- sending;
+- accepted;
+- delivered;
+- read;
+- failed;
+- retrying.
+
+Серверные статусы не должны храниться одним messages.is_read.
+
+Для direct-чата UI показывает:
+- одна отметка: принято сервером;
+- две нейтральные отметки: доставлено устройству получателя;
+- две акцентные отметки: прочитано.
+
+Для group-чата UI показывает агрегат и по запросу список получателей.
+
+6.7. Прочтение
+
+- Пользователь отправляет last_read_sequence для конкретного чата.
+- Значение может только увеличиваться.
+- Сервер проверяет активное членство.
+- Непрочитанное количество считается как last_message_sequence - last_read_sequence
+  с учётом сообщений, которые пользователь имеет право видеть.
+- Read receipt может быть отключён политикой приватности только для отдельных
+  типов чатов, но не должен ломать внутренний unread counter.
+
+6.8. Ответы и цепочки
+
+- reply_to_message_id должен указывать на видимое сообщение того же чата.
+- UI показывает автора и короткое превью исходного сообщения.
+- При удалении исходного сообщения связь сохраняется, текст заменяется tombstone.
+- В дальнейшем reply может быть расширен до thread_root_id и отдельных тредов.
+
+6.9. Редактирование
+
+- Редактировать может автор активного сообщения.
+- Рекомендуемое окно по умолчанию: 24 часа, настраивается компанией.
+- Нельзя редактировать system-сообщения и compliance-locked записи.
+- Используется optimistic concurrency через message.version.
+- Каждая версия хранится в message_versions.
+- UI показывает отметку <изменено>, но не обязан показывать историю обычному
+  участнику без утверждённой продуктовой политики.
+
+6.10. Удаление
+
+Варианты:
+- удалить у себя: скрыть сообщение только для пользователя;
+- удалить для всех: заменить содержимое tombstone в пределах разрешённого окна;
+- compliance delete: специальная аудируемая операция;
+- retention purge: физическое удаление после истечения срока хранения.
+
+По умолчанию:
+- окно <удалить для всех>: 24 часа;
+- сообщение не удаляется физически сразу;
+- attachments переходят в pending_delete;
+- связанные стики архивируются, но связь с source id сохраняется;
+- message_versions и audit не удаляются обычным пользователем.
+
+6.11. Реакции
+
+- Набор реакций ограничивается утверждённым справочником.
+- Одна реакция одного типа от пользователя на сообщение уникальна.
+- Реакцию может поставить только текущий участник чата.
+- Снятие реакции идемпотентно.
+
+6.12. Упоминания
+
+- Поддерживаются упоминания участников текущего чата.
+- Клиент отправляет текст и список упомянутых public employee ids.
+- Сервер повторно извлекает упоминания и проверяет membership.
+- Упоминание создаёт high-priority in-app notification.
+- Массовые упоминания @all/@channel доступны только при permission.
+
+6.13. Закрепление и избранное
+
+- Закрепление сообщения в чате требует chat.pin_message.
+- Снятие закрепления также аудируется для управляемых групп.
+- Личное избранное не видно другим пользователям.
+- Закреплённые чаты и pinned messages являются разными сущностями.
+
+6.14. Пересылка
+
+- Сервер проверяет доступ к исходному и целевому чату.
+- Нельзя пересылать сообщение из другой компании.
+- Политика чата может запрещать пересылку.
+- Вместо сохранения только имени автора хранится ссылка на исходное сообщение,
+  если политика хранения это разрешает.
+- Для удалённого источника показывается безопасный tombstone.
+
+6.15. Черновики и offline-режим
+
+- Черновик уникален по user_id и chat_id.
+- Сохраняется с debounce и optimistic version.
+- Текст черновика не попадает в уведомления и аудит содержимого.
+- Очередь неотправленных сообщений хранится локально в зашифрованном хранилище.
+- После восстановления сети отправка повторяется с прежним client_message_id.
+
+6.16. Поиск
+
+- Поиск выполняется только сервером и только по доступным чатам.
+- Фильтры: текст, автор, дата, тип, наличие вложений, чат.
+- Используется PostgreSQL full-text search или отдельный поисковый сервис.
+- company_id и membership применяются до формирования результатов.
+- Удалённые и скрытые сообщения учитывают действующую retention policy.
+- Запрос ограничивается по длине, частоте и времени выполнения.
+
+6.17. Presence и typing
+
+- Presence является приблизительным, а не доказательством активности.
+- Статусы: online, away, offline; invisible в дальнейшем.
+- Typing event не сохраняется в БД.
+- Typing TTL: 8 секунд.
+- Частота отправки typing ограничивается, например не чаще одного события в 2 секунды.
+- Пользователь видит typing только от участников текущего чата.
+
+
+7. ВЛОЖЕНИЯ
+
+7.1. Хранение
+
+- Новые файлы не хранятся в BYTEA основной PostgreSQL.
+- Используется S3-совместимое object storage или изолированное файловое хранилище.
+- В БД сохраняются metadata, object_key, digest, размер и состояние проверки.
+- Доступ выдаётся через короткоживущие signed URLs.
+
+7.2. Upload flow
+
+1. Клиент запрашивает upload session.
+2. Сервер проверяет пользователя, company quota, MIME и предполагаемый размер.
+3. Клиент загружает файл.
+4. Сервер проверяет фактический размер, magic bytes и SHA-256.
+5. Выполняется антивирусная проверка.
+6. Только clean-файл можно прикрепить к сообщению.
+7. Отправка сообщения и привязка готовых attachment rows выполняются атомарно.
+
+7.3. Запреты
+
+- Запрещены исполняемые типы по умолчанию.
+- Расширение файла не считается MIME-доказательством.
+- Архивы проверяются с ограничением глубины и коэффициента распаковки.
+- SVG и HTML выдаются как download либо проходят строгую очистку.
+- EXIF и другая чувствительная metadata удаляются по политике компании.
+- Filename не используется как object key и очищается перед отображением.
+
+7.4. Квоты
+
+- Максимальный файл: 25 МБ по умолчанию.
+- Максимум файлов в сообщении: 10.
+- Квота компании и пользователя конфигурируема.
+- Будущее платное расширение квоты не меняет permission model.
+
+
+8. ЕДИНАЯ СИСТЕМА УВЕДОМЛЕНИЙ
+
+8.1. Источники
+
+- новое сообщение;
+- упоминание;
+- ответ на сообщение;
+- добавление в чат;
+- назначение задачи;
+- изменение статуса, срока или исполнителя задачи;
+- новый комментарий к задаче;
+- приближение и нарушение срока;
+- автоматическое создание или архивирование стика;
+- приглашение сотрудника;
+- принятие, отзыв или истечение приглашения;
+- увольнение, восстановление и изменение роли;
+- изменение данных компании;
+- событие безопасности: новый вход, новое устройство, смена пароля, блокировка.
+
+8.2. Центр уведомлений
+
+- Отдельная полноразмерная страница или боковая панель, а не только QMenu.
+- Вкладки: Все, Непрочитанные, Сообщения, Задачи, Компания, Безопасность.
+- Фильтрация по дате, приоритету и источнику.
+- Действия: открыть, отметить прочитанным, отметить всё, скрыть, отключить тип.
+- Курсорная пагинация.
+- Deleted source отображается безопасно без битой ссылки.
+- Deep link открывает конкретный чат, сообщение, задачу, комментарий или сотрудника.
+
+8.3. Каналы доставки
+
+MVP:
+- in-app;
+- system tray.
+
+Следующие этапы:
+- email;
+- mobile push;
+- webhook для корпоративных интеграций;
+- digest-рассылка.
+
+8.4. Настройки пользователя
+
+Настройки задаются матрицей:
+- event type;
+- channel;
+- chat или глобальная область;
+- enabled;
+- immediate или digest;
+- quiet hours;
+- privacy preview.
+
+Предустановки:
+- Все сообщения;
+- Только упоминания и личные сообщения;
+- Без звука;
+- Полностью отключено, кроме обязательных security events.
+
+Обязательные события безопасности нельзя полностью отключить, но можно ограничить
+каналы в пределах политики компании.
+
+8.5. Приоритеты
+
+- low: информационное событие;
+- normal: обычное рабочее событие;
+- high: упоминание, назначение, приближение срока;
+- critical: security event, блокер, нарушение политики.
+
+Приоритет не даёт права обходить quiet hours без явно утверждённой политики.
+
+8.6. Дедупликация и агрегация
+
+- Notification имеет dedupe_key.
+- Повтор одного event_id не создаёт дубль.
+- Серия сообщений в одном чате может агрегироваться: <5 новых сообщений>.
+- Серия однотипных изменений задачи может объединяться.
+- Упоминание не должно теряться внутри агрегата обычных сообщений.
+
+8.7. Надёжность доставки
+
+- Уведомление создаётся из outbox event после commit бизнес-транзакции.
+- Delivery worker работает с retry и exponential backoff.
+- Повторная обработка идемпотентна.
+- После максимума попыток запись попадает в dead-letter queue.
+- Состояния: pending, delivered, read, dismissed, failed, expired.
+- Ошибка tray/email не откатывает исходное сообщение или задачу.
+
+8.8. Приватность уведомлений
+
+- На заблокированном экране текст сообщения скрыт по умолчанию.
+- Рекомендуемый tray-текст: <Новое сообщение в Sticky CRM>.
+- Пользователь может разрешить имя отправителя и preview.
+- Текст конфиденциального чата никогда не включается в email subject.
+- Удалённое сообщение не остаётся в notification preview после синхронизации.
+
+
+9. СИСТЕМНАЯ АРХИТЕКТУРА
+
+9.1. Целевая граница доверия
+
+Desktop/Web/Mobile -> HTTPS/WebSocket API -> application services -> PostgreSQL/Object Storage
+
+Desktop-клиент не должен иметь прямых INSERT/UPDATE/DELETE прав на базовые таблицы.
+
+9.2. Компоненты
+
+- AuthService: сессии, устройства, MFA, version gate.
+- AccessService: company context, roles, permissions, membership.
+- MessagingService: чаты, участники, сообщения, receipts, поиск.
+- AttachmentService: upload, scan, storage, signed URLs.
+- NotificationService: preferences, inbox, fan-out, delivery.
+- EventOutboxWorker: надёжная публикация событий после commit.
+- RealtimeGateway: WebSocket/SSE и отзыв подключений.
+- AuditService: защищённый журнал действий.
+
+На первом этапе допустим модульный монолит с этими границами внутри одного сервера.
+Не требуется преждевременное разнесение по микросервисам.
+
+9.3. Realtime
+
+- WebSocket после аутентификации серверной сессией.
+- Подписки определяются сервером по membership.
+- Клиент не может подписаться на произвольный company_id или chat_id.
+- События имеют event_id, type, entity_version и server timestamp.
+- При разрыве WebSocket клиент восстанавливает данные через REST cursor endpoint.
+- Polling остаётся временным fallback, но не основным механизмом.
+
+9.4. Transactional outbox
+
+В одной транзакции сохраняются:
+- бизнес-изменение;
+- audit metadata;
+- outbox event.
+
+После commit worker публикует event в NotificationService и RealtimeGateway.
+Это исключает текущий сценарий <сообщение сохранено, уведомление потеряно>.
+
+
+10. МОДЕЛЬ ДАННЫХ
+
+Следующие имена являются рекомендуемыми и уточняются после schema audit.
+
+10.1. chats
+
+- id BIGSERIAL internal;
+- public_id UUID UNIQUE NOT NULL;
+- company_id INTEGER NOT NULL;
+- chat_type VARCHAR(30) NOT NULL;
+- name VARCHAR(150);
+- created_by INTEGER;
+- status active/archived/blocked;
+- last_message_id BIGINT;
+- last_sequence BIGINT NOT NULL DEFAULT 0;
+- policy JSONB NOT NULL DEFAULT '{}';
+- created_at, updated_at, archived_at;
+- version INTEGER NOT NULL DEFAULT 1.
+
+10.2. chat_members
+
+- chat_id;
+- employee_id;
+- company_id;
+- member_role owner/moderator/member/read_only;
+- membership_status active/left/removed/blocked;
+- joined_at, left_at;
+- last_delivered_sequence;
+- last_read_sequence;
+- notification_level all/mentions/muted;
+- added_by;
+- UNIQUE(chat_id, employee_id).
+
+Composite FK должен доказать, что чат и сотрудник принадлежат одной компании.
+
+10.3. messages
+
+- id BIGSERIAL internal;
+- public_id UUID UNIQUE NOT NULL;
+- company_id INTEGER NOT NULL;
+- chat_id BIGINT NOT NULL;
+- sender_id INTEGER NOT NULL;
+- sequence_number BIGINT NOT NULL;
+- client_message_id UUID NOT NULL;
+- message_type text/system/file/task_link;
+- body TEXT;
+- reply_to_message_id BIGINT;
+- thread_root_id BIGINT;
+- created_at, edited_at, deleted_at;
+- deleted_by;
+- deletion_reason;
+- version INTEGER NOT NULL DEFAULT 1;
+- metadata JSONB NOT NULL DEFAULT '{}';
+- UNIQUE(chat_id, sequence_number);
+- UNIQUE(sender_id, client_message_id).
+
+10.4. message_versions
+
+- id;
+- message_id;
+- version;
+- body;
+- edited_by;
+- created_at;
+- reason;
+- UNIQUE(message_id, version).
+
+10.5. message_user_state
+
+- message_id;
+- employee_id;
+- hidden_at;
+- delivered_at при необходимости точной доставки;
+- read_at при необходимости точного per-message receipt;
+- PRIMARY KEY(message_id, employee_id).
+
+Для unread counter основной масштабируемый механизм: last_read_sequence в chat_members.
+
+10.6. message_reactions
+
+- message_id;
+- employee_id;
+- reaction_code;
+- created_at;
+- UNIQUE(message_id, employee_id, reaction_code).
+
+10.7. message_attachments
+
+- id;
+- public_id UUID;
+- company_id;
+- message_id;
+- uploaded_by;
+- object_key;
+- original_name;
+- media_type;
+- size_bytes;
+- sha256;
+- scan_status pending/clean/rejected/error;
+- storage_status active/pending_delete/deleted;
+- created_at, deleted_at.
+
+10.8. pinned_messages
+
+- chat_id;
+- message_id;
+- pinned_by;
+- pinned_at;
+- UNIQUE(chat_id, message_id).
+
+10.9. notifications
+
+- id BIGSERIAL;
+- public_id UUID;
+- company_id;
+- recipient_employee_id;
+- event_id UUID;
+- event_type;
+- priority;
+- title;
+- safe_preview;
+- source_type;
+- source_public_id;
+- deep_link JSONB;
+- dedupe_key;
+- state pending/delivered/read/dismissed/failed/expired;
+- created_at, delivered_at, read_at, dismissed_at, expires_at;
+- UNIQUE(recipient_employee_id, event_id).
+
+10.10. notification_deliveries
+
+- notification_id;
+- channel in_app/tray/email/push/webhook;
+- state;
+- attempt_count;
+- next_attempt_at;
+- delivered_at;
+- last_error_category;
+- provider_message_id;
+- UNIQUE(notification_id, channel).
+
+10.11. notification_preferences
+
+- employee_id;
+- company_id;
+- event_type;
+- channel;
+- enabled;
+- delivery_mode immediate/digest;
+- quiet_hours JSONB;
+- show_preview BOOLEAN;
+- updated_at;
+- UNIQUE(employee_id, event_type, channel).
+
+10.12. outbox_events
+
+- id BIGSERIAL;
+- event_id UUID UNIQUE;
+- company_id;
+- aggregate_type;
+- aggregate_id;
+- event_type;
+- payload JSONB без секретов;
+- created_at;
+- published_at;
+- attempt_count;
+- next_attempt_at;
+- last_error_category.
+
+
+11. МИГРАЦИИ
+
+Не изменять уже применённые миграции. После 013 использовать новые номера.
+
+Рекомендуемое разбиение:
+- 014_messaging_core_hardening.sql;
+- 015_message_receipts_and_versions.sql;
+- 016_notification_platform.sql;
+- 017_attachment_storage_metadata.sql;
+- 018_messaging_search_indexes.sql.
+
+11.1. Обязательный pre-migration audit
+
+- чаты без company_id;
+- чаты с участниками из разных компаний;
+- duplicate direct chats одной пары;
+- сообщения без существующего sender или chat;
+- sender, не являющийся участником чата;
+- уведомления с чужим recipient/chat;
+- orphan attachments;
+- дубли pinned_chats и drafts;
+- объём BYTEA и крупнейшие вложения;
+- некорректные created_at;
+- сообщения с is_read, не переносимым в group receipts;
+- активные чаты уволенных сотрудников.
+
+Audit формирует отчёт и останавливает rollout при неоднозначных данных.
+Автоматически удалять или перепривязывать данные запрещено.
+
+11.2. Порядок cutover
+
+1. Создать backup и проверить restore.
+2. Добавить новые nullable columns и таблицы.
+3. Установить dual-write на ограниченном контуре.
+4. Выполнить проверяемый backfill company_id, public_id, sequence_number.
+5. Перенести is_read в chat_members.last_read_sequence.
+6. Проверить orphan и cross-tenant отчёт повторно.
+7. Добавить NOT VALID FK/check.
+8. Валидировать constraints.
+9. Переключить чтение на новый API.
+10. Запретить прямые DB-grants старому клиенту через version gate.
+11. После rollback window удалить legacy write path отдельной миграцией.
+
+11.3. Откат
+
+- Отключить feature flags и realtime fan-out.
+- Не удалять новые таблицы во время rollback window.
+- Не пытаться физически вернуть уже отправленные сообщения в старую модель.
+- Использовать forward-fix для committed message/notification events.
+- Любой destructive rollback требует отдельного backup и согласования.
+
+
+12. API-КОНТРАКТЫ
+
+12.1. Чаты
+
+- GET /v1/chats?cursor=&limit=
+- POST /v1/chats/direct
+- POST /v1/chats/group
+- GET /v1/chats/{chat_public_id}
+- PATCH /v1/chats/{chat_public_id}
+- POST /v1/chats/{chat_public_id}/archive
+- GET /v1/chats/{chat_public_id}/members
+- POST /v1/chats/{chat_public_id}/members
+- DELETE /v1/chats/{chat_public_id}/members/{employee_public_id}
+
+12.2. Сообщения
+
+- GET /v1/chats/{chat_public_id}/messages?before=&after=&limit=
+- POST /v1/chats/{chat_public_id}/messages
+- PATCH /v1/messages/{message_public_id}
+- DELETE /v1/messages/{message_public_id}?scope=self|all
+- POST /v1/messages/{message_public_id}/reactions
+- DELETE /v1/messages/{message_public_id}/reactions/{code}
+- POST /v1/chats/{chat_public_id}/read
+- GET /v1/messages/search
+
+12.3. Вложения
+
+- POST /v1/attachments/upload-sessions
+- POST /v1/attachments/{public_id}/complete
+- GET /v1/attachments/{public_id}/download-url
+- DELETE /v1/attachments/{public_id}
+
+12.4. Уведомления
+
+- GET /v1/notifications?cursor=&type=&state=
+- POST /v1/notifications/{public_id}/read
+- POST /v1/notifications/read-all
+- POST /v1/notifications/{public_id}/dismiss
+- GET /v1/notification-preferences
+- PUT /v1/notification-preferences
+
+12.5. Требования ко всем endpoints
+
+- principal и company context только из серверной сессии;
+- TLS;
+- version gate;
+- request_id;
+- bound SQL parameters;
+- лимит размера запроса;
+- rate limiting;
+- одинаковый внешний not-found для отсутствующего и недоступного чужого объекта;
+- Idempotency-Key на create/retry operations;
+- audit для административных и security-sensitive действий;
+- запрет raw token, password и message body в access logs.
+
+
+13. АВТОРИЗАЦИЯ И TENANT-ИЗОЛЯЦИЯ
+
+13.1. Основное правило
+
+Доступ к сообщению разрешён только если одновременно выполняются условия:
+- сессия активна;
+- account и employee активны;
+- company активна;
+- chat.company_id равен company из сессии;
+- employee имеет active membership в чате;
+- политика чата разрешает операцию;
+- роль участника или permission разрешает действие.
+
+13.2. Запрещено доверять
+
+- sender_id;
+- recipient_id для пользовательских уведомлений;
+- company_id;
+- роль пользователя;
+- creator/owner id;
+- read receipt другого пользователя;
+- attachment owner;
+- source company;
+- client timestamp как порядку сообщения.
+
+13.3. Defense in depth
+
+- Прикладная DB role не имеет прямых прав на базовые таблицы.
+- Допустим PostgreSQL RLS как дополнительная защита.
+- Composite FK включают company_id там, где это предотвращает cross-tenant link.
+- Background workers получают ограниченные service roles.
+- Support-доступ отделён от обычных endpoints.
+
+
+14. АУТЕНТИФИКАЦИЯ И СЕССИИ
+
+- Короткоживущий access token: рекомендуемо 15 минут.
+- Rotation refresh token: до 30 дней с абсолютным лимитом.
+- Refresh token хранится в Windows Credential Manager, Keychain или защищённом
+  системном хранилище, не в QSettings.
+- session_generation инвалидирует все сессии после смены пароля/увольнения.
+- Список активных устройств доступен пользователю.
+- Пользователь может завершить отдельную или все сессии.
+- MFA обязательно для company_owner и company_admin после внедрения серверного API.
+- Подозрительный вход создаёт security notification.
+- WebSocket закрывается при отзыве сессии.
+- Старые версии клиента блокируются server-side version gate.
+
+
+15. ЗАЩИТА ДАННЫХ
+
+15.1. Передача и хранение
+
+- TLS 1.2+ между клиентом и API.
+- TLS между сервисами и БД.
+- Шифрование дисков БД, object storage и backup.
+- Раздельные ключи окружений dev/test/prod.
+- Rotation credentials и ключей.
+- Секреты хранятся в secret manager.
+
+15.2. E2EE
+
+E2EE не включать в MVP без отдельного решения, поскольку оно конфликтует с:
+- серверным поиском;
+- антивирусной проверкой;
+- аудитом и legal hold;
+- восстановлением доступа;
+- multi-device синхронизацией;
+- созданием задач и стиков из сообщений.
+
+MVP использует TLS и encryption at rest. E2EE проектируется отдельным режимом для
+чатов, где допустимо отключение серверного поиска и compliance-функций.
+
+15.3. Логи
+
+Не записывать:
+- message body;
+- attachment content;
+- raw search query при наличии персональных данных;
+- password;
+- access/refresh tokens;
+- signed URL;
+- full invitation token;
+- clipboard content.
+
+Допустимо записывать:
+- request_id;
+- event_id;
+- internal entity id в защищённом контуре;
+- company_id;
+- actor id;
+- operation;
+- result category;
+- duration;
+- размер без содержимого.
+
+
+16. АУДИТ
+
+Обязательные события:
+- chat.created/archived;
+- chat.member_added/removed/role_changed;
+- message.deleted_for_all;
+- message.compliance_viewed;
+- message.exported;
+- attachment.rejected/downloaded_by_admin;
+- notification.preference_changed;
+- session.created/revoked;
+- security.permission_denied;
+- security.cross_tenant_attempt;
+- security.rate_limited;
+- company.retention_policy_changed.
+
+Обычная отправка каждого сообщения не обязана создавать тяжёлую audit row, если
+само сообщение и outbox обеспечивают достаточный операционный след.
+
+Audit:
+- append-only;
+- недоступен обычному клиенту;
+- не содержит текста сообщения;
+- защищён отдельными permissions;
+- имеет срок хранения не меньше 365 дней по умолчанию;
+- экспортируется только аудируемой операцией.
+
+
+17. RETENTION И УДАЛЕНИЕ
+
+Рекомендуемые значения до утверждения политики:
+- сообщения: 3 года;
+- audit: минимум 1 год;
+- notification inbox: 90 дней;
+- failed delivery metadata: 30 дней;
+- удалённые attachments pending_delete: 30 дней;
+- черновики: до удаления пользователем или увольнения по утверждённой политике.
+
+Политика задаётся компанией в разрешённых системных пределах.
+
+Должны поддерживаться:
+- scheduled purge;
+- tombstone;
+- export before purge;
+- legal hold в будущем;
+- удаление персональных данных по утверждённой процедуре;
+- отчёт об удалённых объектах без их содержимого.
+
+
+18. RATE LIMITING И ЗАЩИТА ОТ ЗЛОУПОТРЕБЛЕНИЙ
+
+Минимальные лимиты конфигурируются:
+- отправка сообщений на пользователя и чат;
+- создание чатов;
+- добавление участников;
+- поиск;
+- typing events;
+- reactions;
+- upload sessions и байты;
+- скачивание вложений;
+- WebSocket reconnect;
+- notification delivery.
+
+При превышении:
+- HTTP 429;
+- Retry-After;
+- exponential backoff на клиенте;
+- security metric;
+- временное ограничение без блокировки всей компании.
+
+Защита от спама:
+- mute/block пользователя как будущая функция;
+- ограничение массовых упоминаний;
+- квоты webhook/email;
+- выявление аномального fan-out;
+- административная жалоба без раскрытия лишних переписок.
+
+
+19. UI/UX
+
+19.1. Список чатов
+
+- фиксированная компактная высота строки;
+- название, последний отправитель, preview, время, unread badge;
+- mute/pin/mention indicators;
+- архивная секция;
+- фильтры: все, непрочитанные, личные, группы, архив;
+- поиск по названию и участникам;
+- пагинация без загрузки всего списка.
+
+19.2. Окно чата
+
+- загрузка порциями при прокрутке вверх;
+- разделитель непрочитанных;
+- кнопка перехода вниз с количеством новых сообщений;
+- reply preview;
+- состояния отправки и retry;
+- контекстные действия по permissions;
+- панель закреплённых сообщений;
+- список участников и их ролей;
+- доступное управление с клавиатуры;
+- отсутствие скачков layout при появлении статуса или вложения.
+
+19.3. Композер
+
+- многострочный текст;
+- черновик;
+- reply state;
+- attachment queue;
+- предупреждение о запрещённом/слишком большом файле;
+- отправка блокируется только на время регистрации текущего client_message_id;
+- повтор использует тот же id;
+- пароль, токены и секреты не вставляются автоматически из приложения.
+
+19.4. Центр уведомлений
+
+- полноразмерный список с группировкой по дате;
+- unread состояние визуально отличается без зависимости только от цвета;
+- badge показывает ограниченное значение <99+>;
+- клик выполняет deep link до конкретной сущности;
+- deleted source не приводит к ошибке интерфейса;
+- отдельный раздел security notifications;
+- tray preview выключен по умолчанию.
+
+
+20. ПРОИЗВОДИТЕЛЬНОСТЬ И SLO
+
+Целевые показатели для штатной нагрузки:
+- принятие текстового сообщения API p95 до 500 мс;
+- открытие первой страницы чата p95 до 1 секунды;
+- in-app notification p95 до 5 секунд после commit;
+- восстановление WebSocket с cursor sync без потери событий;
+- поиск p95 до 2 секунд для компании среднего размера;
+- отсутствие N+1 соединений при notification fan-out;
+- одна транзакция на бизнес-операцию, а не на каждого получателя;
+- bounded memory при истории в сотни тысяч сообщений.
+
+Нагрузочное тестирование проводится минимум для:
+- 15, 100, 1 000 сотрудников компании;
+- групп 15, 100 и 1 000 участников;
+- всплеска 100 сообщений/сек;
+- fan-out уведомлений;
+- одновременного reconnect клиентов;
+- загрузки файлов до квоты.
+
+
+21. МОНИТОРИНГ
+
+Метрики:
+- messages_accepted_total;
+- messages_failed_total по категории;
+- message_accept_latency;
+- duplicate_idempotency_total;
+- active_websocket_connections;
+- websocket_reconnect_total;
+- unread_lag;
+- outbox_pending_count и oldest_age;
+- notification_delivery_latency;
+- notification_failed_total;
+- dead_letter_count;
+- attachment_scan_latency;
+- attachment_rejected_total;
+- permission_denied_total;
+- cross_tenant_attempt_total;
+- rate_limited_total;
+- DB lock wait и deadlocks.
+
+Алерты:
+- outbox backlog;
+- рост ошибок отправки;
+- потеря realtime connection;
+- рост cross-tenant попыток;
+- всплеск скачивания файлов;
+- антивирус недоступен;
+- превышение object storage quota;
+- deadlocks;
+- ошибка backup или restore drill.
+
+
+22. ТЕСТИРОВАНИЕ
+
+22.1. Unit
+
+- validation body, filenames, reactions и IDs;
+- idempotency;
+- permission policy;
+- unread calculation;
+- notification preference resolution;
+- aggregation и dedupe;
+- retention state machine;
+- safe notification preview.
+
+22.2. Интеграционные
+
+- direct chat создаётся один раз;
+- group membership и роли;
+- send message + outbox в одной транзакции;
+- notification создаётся после commit;
+- rollback не создаёт notification;
+- read sequence монотонен;
+- edit version conflict;
+- delete tombstone;
+- attachment scan и signed URL;
+- deep link на сообщение/задачу;
+- увольнение отзывает доступ и соединение.
+
+22.3. Concurrency
+
+- 50 повторов одного client_message_id создают одно сообщение;
+- параллельные sequence allocation не дают дублей;
+- send против archive chat;
+- send против remove member;
+- edit против delete;
+- reaction add/remove;
+- read update из нескольких устройств;
+- outbox worker retry;
+- два direct chat create для одной пары;
+- retention purge против download.
+
+22.4. Security
+
+- чтение и отправка в чужой company/chat;
+- IDOR по последовательным internal ids;
+- подмена sender_id/company_id/role;
+- пользователь не из chat_members;
+- уволенный сотрудник с незакрытым клиентом;
+- отозванный refresh token;
+- старый клиент без version gate;
+- SQL injection;
+- XSS и опасные URL;
+- MIME spoofing;
+- zip bomb;
+- oversized body/upload;
+- path traversal;
+- SSRF через preview URL;
+- notification spoofing;
+- утечка body/token в logs;
+- timing enumeration недоступного чата;
+- массовое упоминание без permission.
+
+22.5. UI
+
+- offline send и retry;
+- status transitions;
+- unread divider;
+- pagination без скачка scroll;
+- reply/edit/delete;
+- deleted source;
+- foreign pending actions отсутствуют;
+- tray preview privacy;
+- quiet hours;
+- keyboard navigation;
+- разные DPI и размеры экрана;
+- длинные имена, слова и файлы не ломают layout.
+
+22.6. Миграционные
+
+- repeatable/idempotent DDL;
+- duplicate audit останавливает миграцию;
+- backfill не создаёт cross-tenant связей;
+- constraints проходят validation;
+- rollback transaction;
+- восстановление backup;
+- старый и новый read path сравниваются на одном snapshot.
+
+
+23. ПОЭТАПНЫЙ ПЛАН РЕАЛИЗАЦИИ
+
+Этап 0. Аудит и решения
+- Выполнить schema/data audit.
+- Утвердить retention, edit/delete window, max attachment и tray privacy.
+- Выбрать API framework, object storage и realtime transport.
+- Зафиксировать permission matrix.
+
+Критерий: отчёт без неизвестных cross-tenant данных и утверждённые политики.
+
+Этап 1. Security foundation
+- Auth API, trusted sessions, refresh rotation.
+- AccessContext только из сессии.
+- version gate.
+- ограниченная DB role.
+- централизованный permission middleware.
+
+Критерий: модифицированный клиент не может подменить company/user/role.
+
+Этап 2. Messaging schema и API
+- Миграция 014.
+- public UUID, membership status, sequence, client_message_id.
+- REST API list/create/send/read.
+- cursor pagination.
+- soft delete и versions.
+
+Критерий: надёжная переписка работает без прямых DB writes клиента.
+
+Этап 3. Realtime и outbox
+- Outbox в бизнес-транзакциях.
+- Worker и retry.
+- WebSocket gateway.
+- reconnect cursor sync.
+- revoke session disconnect.
+
+Критерий: нет потери событий при падении worker или соединения.
+
+Этап 4. Notification platform
+- Миграция notifications/preferences/deliveries.
+- Единый notification inbox.
+- in-app и tray channels.
+- deep links.
+- dedupe, aggregation, quiet hours.
+
+Критерий: сообщения, задачи и security events используют один надёжный механизм.
+
+Этап 5. Основной UX переписок
+- receipts и unread divider;
+- replies;
+- reactions;
+- mentions;
+- pins;
+- архив;
+- улучшенные drafts/offline queue.
+
+Критерий: ежедневные сценарии не требуют ручного обновления и не теряют данные.
+
+Этап 6. Вложения и поиск
+- Object storage.
+- Upload sessions.
+- AV scanning.
+- signed URLs.
+- full-text indexes.
+- backfill старых BYTEA по контролируемым пакетам.
+
+Критерий: новые файлы не хранятся в основной БД, поиск tenant-safe.
+
+Этап 7. Production hardening
+- load/concurrency/security tests;
+- MFA admins;
+- session/device UI;
+- monitoring и alerting;
+- backup/restore drill;
+- penetration test;
+- staged rollout feature flags.
+
+Критерий: выполнены SLO, security checklist и rollback drill.
+
+Этап 8. Дальнейшее развитие
+- email/push/webhook channels;
+- mobile/web clients;
+- SSO/SCIM;
+- DLP и legal hold;
+- external guests;
+- multi-company membership;
+- E2EE для отдельных политик;
+- интеграции с календарём, документами и отчётами.
+
+
+24. РИСКИ И МЕРЫ
+
+Риск: прямой PostgreSQL доступ позволяет обходить UI permissions.
+Мера: API boundary, минимальная DB role, version gate, закрытие старых grants.
+
+Риск: существующие чаты содержат участников разных компаний.
+Мера: pre-migration audit, ручное решение конфликтов, composite FK.
+
+Риск: потеря уведомлений после commit сообщения.
+Мера: transactional outbox и идемпотентный worker.
+
+Риск: дубль сообщения после retry.
+Мера: client_message_id + UNIQUE(sender_id, client_message_id).
+
+Риск: неверный unread в группах.
+Мера: last_read_sequence на каждого участника.
+
+Риск: физическое удаление разрушает аудит и связи стиков.
+Мера: tombstone, retention purge, source status.
+
+Риск: рост PostgreSQL из-за BYTEA.
+Мера: object storage, квоты, поэтапная миграция legacy attachments.
+
+Риск: notification fatigue.
+Мера: preferences, grouping, quiet hours, priority policy.
+
+Риск: утечка текста через tray/email.
+Мера: preview off по умолчанию, safe templates, sensitivity policy.
+
+Риск: поиск раскрывает чужие данные.
+Мера: tenant/membership filter до search result и security tests.
+
+Риск: company_admin получает скрытый доступ к личным сообщениям.
+Мера: роли управления компанией не дают права чтения; отдельный compliance-flow.
+
+Риск: E2EE конфликтует с CRM-функциями.
+Мера: не включать в MVP; проектировать как отдельный режим с явными ограничениями.
+
+Риск: старый клиент продолжает обходить новые проверки.
+Мера: обязательный server-side minimum_client_version.
+
+
+25. ДАЛЬНЕЙШЕЕ РАЗВИТИЕ ОБЩЕЙ СИСТЕМЫ
+
+25.1. Единая event platform
+
+Сообщения, задачи, комментарии, стики, сотрудники и компания публикуют типизированные
+domain events через outbox. NotificationService подписывается на события, но не
+встраивается в бизнес-транзакции каждого модуля.
+
+25.2. Общие deep links
+
+Ввести единый формат:
+- entity_type;
+- public_id;
+- parent_public_id;
+- action;
+- optional anchor.
+
+Это позволит одинаково открывать сущности из уведомлений, поиска, стиков и отчётов.
+
+25.3. Единая permission model
+
+- permission registry;
+- role templates;
+- company overrides;
+- resource-level checks;
+- audit изменений;
+- deny by default;
+- future custom roles без переписывания каждого UI.
+
+25.4. Multi-company
+
+При переходе к нескольким компаниям у одной identity:
+- отделить account/identity от employee profile;
+- хранить role и status в membership;
+- добавить company switcher;
+- сессия содержит выбранный membership context;
+- chats и notifications принадлежат membership/company;
+- глобальная уникальность email пересматривается;
+- cross-company chat запрещён до отдельной guest/federation модели.
+
+25.5. Интеграции
+
+- создание задачи из сообщения;
+- прикрепление чата к задаче/проекту;
+- уведомления календаря;
+- документы с permission-aware ссылками;
+- webhook subscriptions;
+- экспорт отчётов без раскрытия лишнего содержимого;
+- SIEM integration для security events.
+
+25.6. Billing и квоты
+
+- employee seats;
+- storage quota;
+- notification/email quota;
+- retention plan;
+- advanced audit/DLP plan;
+- billing не должен давать права доступа и не смешивается с authorization.
+
+
+26. КРИТЕРИИ ПРИЁМКИ MVP
+
+1. Клиент не выполняет прямые записи в chats/messages/notifications.
+2. company и principal определяются только серверной сессией.
+3. Чужой chat/message возвращает безопасный not-found.
+4. Один client_message_id создаёт не более одного сообщения.
+5. Сообщение и outbox event сохраняются атомарно.
+6. Уведомление не теряется при временной ошибке worker.
+7. Групповой unread считается отдельно для каждого участника.
+8. Уволенный сотрудник немедленно теряет API и realtime доступ.
+9. Редактирование создаёт версию, удаление создаёт tombstone.
+10. Вложения проходят MIME, size и AV проверки.
+11. Signed URL не даёт доступ к файлу другой компании.
+12. Центр уведомлений поддерживает фильтры, read/dismiss и deep links.
+13. Настройки каналов и quiet hours применяются сервером.
+14. Tray не показывает текст по умолчанию.
+15. Поиск не выдаёт результаты недоступных чатов.
+16. Rate limiting работает на send/search/upload/realtime reconnect.
+17. Технические логи не содержат текста, файлов и токенов.
+18. Migration audit не обнаруживает нерешённых cross-tenant связей.
+19. Unit, integration, concurrency, security, UI и migration tests проходят.
+20. Backup restore и rollback/forward-fix сценарий проверены.
+
+
+27. РЕШЕНИЯ, КОТОРЫЕ НУЖНО УТВЕРДИТЬ ДО ЭТАПА 1
+
+Рекомендуемые стартовые значения:
+- окно редактирования: 24 часа;
+- окно удаления для всех: 24 часа;
+- хранение сообщений: 3 года;
+- хранение audit: не менее 1 года;
+- один файл: 25 МБ;
+- сообщение: до 10 файлов и 100 МБ суммарно;
+- access token: 15 минут;
+- refresh token: до 30 дней с rotation;
+- tray preview: выключен;
+- E2EE: вне MVP;
+- основной realtime transport: WebSocket;
+- fallback: REST cursor sync;
+- initial deployment: модульный монолит, не микросервисы.
+
+До разработки необходимо утвердить:
+- допустимость company compliance export;
+- retention и требования законодательства;
+- набор запрещённых файлов;
+- object storage;
+- API framework;
+- необходимость email в первом релизе;
+- policy для @all;
+- необходимость истории редактирования для обычных участников;
+- список обязательных security notifications.
+
+
+28. ПЛАНИРУЕМЫЕ МОДУЛИ И ФАЙЛЫ
+
+Серверная часть:
+- messaging_service;
+- notification_service;
+- attachment_service;
+- realtime_gateway;
+- permission_service;
+- session_service;
+- outbox_worker;
+- audit_service.
+
+Desktop:
+- chat_list_model;
+- messages_model;
+- message_composer;
+- notification_center;
+- notification_preferences;
+- session_devices_widget;
+- API client без прямого SQL.
+
+Миграции:
+- 014_messaging_core_hardening.sql;
+- 015_message_receipts_and_versions.sql;
+- 016_notification_platform.sql;
+- 017_attachment_storage_metadata.sql;
+- 018_messaging_search_indexes.sql.
+
+Тесты:
+- test_messaging_permissions;
+- test_messaging_idempotency;
+- test_messaging_concurrency;
+- test_message_receipts;
+- test_notification_delivery;
+- test_notification_preferences;
+- test_attachment_security;
+- test_realtime_reconnect;
+- test_messaging_migrations;
+- test_messaging_ui.
+
+
+29. ИТОГОВОЕ РЕШЕНИЕ
+
+Ближайший безопасный путь развития:
+
+1. Провести аудит существующих chat/message/notification данных.
+2. Внедрить серверные сессии и permission boundary.
+3. Перевести переписки с прямого SQL на Messaging API.
+4. Добавить idempotency, sequence, per-member read state и soft delete.
+5. Внедрить transactional outbox и realtime delivery.
+6. Построить единый NotificationService для всей CRM.
+7. Перенести вложения в object storage и включить AV scanning.
+8. После security/load/rollback проверок закрыть прямые DB-grants старому клиенту.
+
+Без выполнения пунктов 1-3 расширение только визуального функционала переписок
+увеличит поверхность атаки и стоимость дальнейшей миграции. Поэтому безопасность,
+tenant isolation и надёжная доставка должны предшествовать реакциям, каналам,
+email и другим расширениям интерфейса.

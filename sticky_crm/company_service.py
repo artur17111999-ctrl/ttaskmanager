@@ -591,6 +591,24 @@ def create_company(
         if cursor.rowcount != 1:
             raise ConflictError("The actor company assignment changed concurrently")
 
+        # A self-chat may be created before the user creates their first company.
+        # It is safe to attach only that user's orphaned self-chat to the new tenant.
+        cursor.execute(
+            """
+            UPDATE chats AS chat
+            SET company_id = %s
+            WHERE chat.is_self = TRUE
+              AND chat.company_id IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM chat_members member
+                  WHERE member.chat_id = chat.id
+                    AND member.employee_id = %s
+              )
+            """,
+            (company_id, actor_id),
+        )
+
         created_actor = dict(actor_state)
         created_actor.update(company_id=company_id, role=ROLE_OWNER, owner_employee_id=actor_id)
         _open_membership(cursor, company_id, actor_id, ROLE_OWNER, actor_id, "company_created")

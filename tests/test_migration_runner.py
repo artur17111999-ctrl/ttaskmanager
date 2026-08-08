@@ -80,6 +80,78 @@ class MigrationRunnerTests(unittest.TestCase):
         with self.assertRaises(migration_runner.MigrationError):
             migration_runner._verify_history(migrations, applied)
 
+    def test_existing_managed_schema_without_history_blocks_bootstrap(self):
+        connection = _HistoryConnection(
+            history_exists=False,
+            markers=(True, True, True, True, True),
+        )
+
+        with self.assertRaisesRegex(
+            migration_runner.MigrationError,
+            "Managed schema exists without public.schema_migrations",
+        ) as error:
+            migration_runner._assert_history_bootstrap_is_safe(connection)
+
+        self.assertIn("companies_table", str(error.exception))
+
+    def test_clean_database_can_create_migration_history(self):
+        connection = _HistoryConnection(
+            history_exists=False,
+            markers=(False, False, False, False, False),
+        )
+
+        migration_runner._assert_history_bootstrap_is_safe(connection)
+
+    def test_existing_history_skips_schema_fingerprint_probe(self):
+        connection = _HistoryConnection(history_exists=True)
+
+        migration_runner._assert_history_bootstrap_is_safe(connection)
+
+        self.assertEqual(len(connection.cursor_instance.executed), 1)
+
+    def test_read_only_check_rejects_untracked_managed_schema(self):
+        cursor = _HistoryCursor(
+            history_exists=False,
+            markers=(True, False, False, False, False),
+        )
+
+        with self.assertRaisesRegex(
+            migration_runner.MigrationError,
+            "Managed schema exists without public.schema_migrations",
+        ):
+            migration_runner._raise_for_untracked_managed_schema(cursor)
+
+
+class _HistoryCursor:
+    def __init__(self, history_exists, markers=()):
+        self.history_exists = history_exists
+        self.markers = markers
+        self.executed = []
+        self.fetch_index = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def execute(self, query, params=None):
+        self.executed.append((query, params))
+
+    def fetchone(self):
+        self.fetch_index += 1
+        if self.fetch_index == 1:
+            return ("schema_migrations" if self.history_exists else None,)
+        return tuple(self.markers)
+
+
+class _HistoryConnection:
+    def __init__(self, history_exists, markers=()):
+        self.cursor_instance = _HistoryCursor(history_exists, markers)
+
+    def cursor(self):
+        return self.cursor_instance
+
 
 if __name__ == "__main__":
     unittest.main()

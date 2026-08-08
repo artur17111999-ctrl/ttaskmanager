@@ -24,6 +24,14 @@ MIGRATION_FILE_RE = re.compile(r"^(\d{3,})_[A-Za-z0-9][A-Za-z0-9_-]*\.sql$")
 DOLLAR_QUOTE_RE = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
 ADVISORY_LOCK_KEYS = (0x53544352, 0x4D494752)  # "STCR", "MIGR"
 
+_MANAGED_SCHEMA_MARKERS = (
+    "companies_table",
+    "employees_company_id",
+    "company_invitations_table",
+    "accounts_session_generation",
+    "idempotency_requests_table",
+)
+
 
 class MigrationError(RuntimeError):
     """Raised when migration files or database history are unsafe to use."""
@@ -220,6 +228,56 @@ def _schema_migrations_exists(cursor) -> bool:
     return cursor.fetchone()[0] is not None
 
 
+def _untracked_managed_schema_markers(cursor) -> tuple[str, ...]:
+    """Return managed DDL fingerprints when no migration history is present."""
+    if _schema_migrations_exists(cursor):
+        return ()
+
+    cursor.execute(
+        """
+        SELECT
+            to_regclass('public.companies') IS NOT NULL,
+            EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'employees'
+                  AND column_name = 'company_id'
+            ),
+            to_regclass('public.company_invitations') IS NOT NULL,
+            EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'accounts'
+                  AND column_name = 'session_generation'
+            ),
+            to_regclass('public.idempotency_requests') IS NOT NULL
+        """
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise MigrationError("Could not inspect managed schema fingerprints")
+    return tuple(
+        marker for marker, present in zip(_MANAGED_SCHEMA_MARKERS, row) if present
+    )
+
+
+def _raise_for_untracked_managed_schema(cursor) -> None:
+    markers = _untracked_managed_schema_markers(cursor)
+    if markers:
+        raise MigrationError(
+            "Managed schema exists without public.schema_migrations; refusing to "
+            "apply or adopt history automatically. Create and verify a backup, "
+            "audit the schema, then use an explicitly reviewed baseline procedure. "
+            f"Detected markers: {', '.join(markers)}"
+        )
+
+
+def _assert_history_bootstrap_is_safe(connection) -> None:
+    """Refuse to invent history for an already modified database."""
+    with connection.cursor() as cursor:
+        _raise_for_untracked_managed_schema(cursor)
+
+
 def _load_applied(cursor) -> dict[int, AppliedMigration]:
     if not _schema_migrations_exists(cursor):
         return {}
@@ -297,6 +355,7 @@ def check_migrations() -> None:
     try:
         connection.set_session(readonly=True, autocommit=False)
         with connection.cursor() as cursor:
+            _raise_for_untracked_managed_schema(cursor)
             applied = _load_applied(cursor)
         pending = _verify_history(migrations, applied)
         _print_status(migrations, applied)
@@ -360,6 +419,7 @@ def apply_migrations() -> None:
     try:
         _acquire_lock(connection)
         lock_acquired = True
+        _assert_history_bootstrap_is_safe(connection)
         _ensure_history_table(connection)
 
         with connection.cursor() as cursor:
